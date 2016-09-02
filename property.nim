@@ -51,6 +51,8 @@ proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
 
     result.add( (name: identDefs[0], typ: identDefs[1]) )
 
+# parameter to control export
+    
 macro createMeshType(name, argStmtList: untyped) : stmt =
   name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
@@ -58,108 +60,74 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
   argTypeSection.expectKind nnkTypeSection
   result = newNimNode(nnkStmtList)
 
+  let
+    propertyCategoryNames    = ["vertex", "face", "edge", "halfedge"]
+    propertyCategoryNamesUC  = ["Vertex", "Face", "Edge", "Halfedge"]
   
+  var propertiesSequences: array[4, seq[tuple[name, typ: NimNode]]]
   
-  var vertexPropertiesSeq, facePropertiesSeq, edgePropertiesSeq, halfedgePropertiesSeq: seq[tuple[name, typ: NimNode]]
-
   for typeDef in argTypeSection:
     let ident = typeDef[0].ident
     case $ident
     of "VertexData":
-      vertexPropertiesSeq = mapTypeToSeqOfMembers(typeDef)
+      propertiesSequences[0] = mapTypeToSeqOfMembers(typeDef)
     of "FaceData":
-      facePropertiesSeq = mapTypeToSeqOfMembers(typeDef)
+      propertiesSequences[1] = mapTypeToSeqOfMembers(typeDef)
     of "EdgeData":
-      edgePropertiesSeq = mapTypeToSeqOfMembers(typeDef)
+      propertiesSequences[2] = mapTypeToSeqOfMembers(typeDef)
     of "HalfedgeData":
-      halfedgePropertiesSeq = mapTypeToSeqOfMembers(typeDef)
+      propertiesSequences[3] = mapTypeToSeqOfMembers(typeDef)
     else:
       error("unexpected identifier " & $ident)
 
-  let
-    vertexPropertiesType = structOfArrays(newIdentNode($name.ident & "VertexProperties"), vertexPropertiesSeq)
-    facePropertiesType = structOfArrays(newIdentNode($name.ident & "FaceProperties"), facePropertiesSeq)
-    edgePropertiesType = structOfArrays(newIdentNode($name.ident & "EdgeProperties"), edgePropertiesSeq)
-    halfedgePropertiesType = structOfArrays(newIdentNode($name.ident & "HalfedgeProperties"), halfedgePropertiesSeq)
-
-  let typeSection = nnkTypeSection.newTree(vertexPropertiesType, facePropertiesType, edgePropertiesType, halfedgePropertiesType)
+  var propertiesTypes: array[4, Nimnode]
+  for i,propertiesSeq in propertiesSequences:
+    propertiesTypes[i] = structOfArrays(newIdentNode($name.ident & propertyCategoryNamesUC[i] & "Properties"), propertiesSeq)
+    
+  let typeSection = nnkTypeSection.newTree(propertiesTypes[0], propertiesTypes[1], propertiesTypes[2], propertiesTypes[3])
 
   let
-    vertexPropertiesTypeIdent   = vertexPropertiesType[0]
-    facePropertiesTypeIdent     = facePropertiesType[0]
-    edgePropertiesTypeIdent     = edgePropertiesType[0]
-    halfedgePropertiesTypeIdent = halfedgePropertiesType[0]
+    vertexPropertiesTypeIdent   = propertiesTypes[0][0]
+    facePropertiesTypeIdent     = propertiesTypes[1][0]
+    edgePropertiesTypeIdent     = propertiesTypes[2][0]
+    halfedgePropertiesTypeIdent = propertiesTypes[3][0]
   
   var tmp = quote do:
     type
-      `name` = object
-        vertexProperties: `vertexPropertiesTypeIdent`
-        faceProperties: `facePropertiesTypeIdent`
-        halfedgeProperties: `halfedgePropertiesTypeIdent`
-        edgeProperties: `edgePropertiesTypeIdent`
+      `name`* = object
+        vertexProperties*: `vertexPropertiesTypeIdent`
+        faceProperties*: `facePropertiesTypeIdent`
+        halfedgeProperties*: `halfedgePropertiesTypeIdent`
+        edgeProperties*: `edgePropertiesTypeIdent`
 
   typeSection.add tmp[0][0]
 
-  let
-    vertexWalkerIdent   = newIdentNode("Vertex"   & $name.ident & "Walker")
-    faceWalkerIdent     = newIdentNode("Face"     & $name.ident & "Walker")
-    edgeWalkerIdent     = newIdentNode("Edge"     & $name.ident & "Walker")
-    halfedgeWalkerIdent = newIdentNode("Halfedge" & $name.ident & "Walker")
-
   result.add typeSection
-    
-  result.add quote do:
-      type
-        `vertexWalkerIdent` = object
-          mesh: ptr `name`
-          handle: VertexHandle
-
-        `faceWalkerIdent` = object
-          mesh: ptr `name`
-          handle: FaceHandle
-
-        `edgeWalkerIdent` = object
-          mesh: ptr `name`
-          handle: EdgeHandle
-
-        `halfedgeWalkerIdent` = object
-          mesh: ptr `name`
-          handle: HalfedgeHandle
-
-
   
-  for tup in vertexPropertiesSeq:
-    let
-      typ = tup.typ
-      name = tup.name
+  var walkerNames : array[4, string]  
+  for i, categoryName in propertyCategoryNamesUC:
+    let identStr = categoryName & $name.ident & "Walker"
+    walkerNames[i] = identStr
+    let identNode = newIdentNode(identStr)
     result.add quote do:
-      proc `name`(walker: `vertexWalkerIdent`): var `typ` =    
-        walker.mesh.vertexProperties.`name`[walker.handle.int]
+      type
+        `identNode`* = object
+          mesh*: ptr `name`
+          handle*: VertexHandle
 
-  for tup in facePropertiesSeq:
+  for i, propertiesSeq in propertiesSequences:
     let
-      typ = tup.typ
-      name = tup.name
-    result.add quote do:
-      proc `name`(walker: `faceWalkerIdent`): var `typ` =
-        walker.mesh.faceProperties.`name`[walker.handle.int]
-
-  for tup in edgePropertiesSeq:
-    let
-      typ = tup.typ
-      name = tup.name
-    result.add quote do:
-      proc `name`(walker: `edgeWalkerIdent`): var `typ` =
-        walker.mesh.edgeProperties.`name`[walker.handle.int]
-    
-  for tup in halfedgePropertiesSeq:
-    let
-      typ = tup.typ
-      name = tup.name
-    result.add quote do:
-      proc `name`(walker: `halfedgeWalkerIdent`): var `typ` =
-        walker.mesh.halfedgeProperties.`name`[walker.handle.int]
-
+      propertiesName = newIdentNode(propertyCategoryNames[i] & "Properties")
+      walkerIdent = newIdentNode(walkerNames[i])
+      
+    for tup in propertiesSeq:
+      let
+        typ = tup.typ
+        name = tup.name
+        
+      result.add quote do:
+        proc `name`*(walker: `walkerIdent`): var `typ` =    
+          walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
   echo result.repr
         
