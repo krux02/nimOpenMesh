@@ -26,19 +26,15 @@ type
     edges*    : seq[Edge]
     faces*    : seq[Face]
 
-proc isValid*(handle: VertexHandle | HalfedgeHandle | EdgeHandle | FaceHandle): bool =
+proc isValid*(handle: VertexHandle): bool =
   handle.int >= 0
-    
-proc `[]`*(mesh: BaseMesh, handle: VertexHandle): Vertex =
-  mesh.vertices[handle.int]
-    
-proc `[]`*(mesh: BaseMesh, handle: HalfedgeHandle): Halfedge =
-  mesh.edges[handle.int div 2][handle.int and 1]
 
-proc `[]`*(mesh: BaseMesh, handle: EdgeHandle): Edge =
-  mesh.edges[handle.int]
+proc isValid*(handle: HalfedgeHandle): bool =
+  handle.int >= 0
 
-proc `[]`*(mesh: BaseMesh, handle: FaceHandle): Face =
-  mesh.faces[handle.int]
+proc isValid*(handle: EdgeHandle): bool =
+  handle.int >= 0
 
-proc `[]`*[T](mesh: ptr BaseMesh, handle: T): auto = mesh[][handle]
+proc isValid*(handle: FaceHandle): bool =
+  handle.int >= 0
+ 

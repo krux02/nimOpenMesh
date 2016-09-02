@@ -95,6 +95,9 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
   var tmp = quote do:
     type
       `name`* = object
+        vertices* : seq[Vertex]
+        edges*    : seq[Edge]
+        faces*    : seq[Face]
         vertexProperties*: `vertexPropertiesTypeIdent`
         faceProperties*: `facePropertiesTypeIdent`
         halfedgeProperties*: `halfedgePropertiesTypeIdent`
@@ -103,10 +106,12 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
   typeSection.add tmp[0][0]
 
   result.add typeSection
+
+  # create walker types
   
   var walkerNames : array[4, string]  
   for i, categoryName in propertyCategoryNamesUC:
-    let identStr = categoryName & $name.ident & "Walker"
+    let identStr = $name.ident & "_" & categoryName & "Walker"
     walkerNames[i] = identStr
     let identNode = newIdentNode(identStr)
     result.add quote do:
@@ -114,6 +119,8 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
         `identNode`* = object
           mesh*: ptr `name`
           handle*: VertexHandle
+
+  # create property accessors from walkers
 
   for i, propertiesSeq in propertiesSequences:
     let
@@ -130,6 +137,9 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
   echo result.repr
+
+  # create walker navigation methods
+  
         
 createMeshType(MyMeshType):
   type
