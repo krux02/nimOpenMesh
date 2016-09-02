@@ -26,15 +26,14 @@ type
     edges*    : seq[Edge]
     faces*    : seq[Face]
 
-proc isValid*(handle: VertexHandle): bool =
-  handle.int >= 0
+template handleProcs(HandleType: typedesc) =
+  proc `==`*(handleA, handleB: HandleType): bool =
+    handleA == handleB
 
-proc isValid*(handle: HalfedgeHandle): bool =
-  handle.int >= 0
+  proc isValid*(handle: HandleType): bool =
+    handle.int >= 0
 
-proc isValid*(handle: EdgeHandle): bool =
-  handle.int >= 0
-
-proc isValid*(handle: FaceHandle): bool =
-  handle.int >= 0
- 
+handleProcs(VertexHandle)
+handleProcs(HalfedgeHandle)
+handleProcs(EdgeHandle)
+handleProcs(FaceHandle)

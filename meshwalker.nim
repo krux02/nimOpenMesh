@@ -69,114 +69,117 @@ template walkerMethods(VertexWalkerType, FaceWalkerType, EdgeWalkerType, Halfedg
   proc goHalfedge*(walker: EdgeWalkerType): HalfedgeWalkerType =
     result.mesh   = walker.mesh
     result.handle = HalfedgeHandle(walker.handle.int * 2)
-
-walkerMethods(BaseMesh_VertexWalker, BaseMesh_FaceWalker, BaseMesh_EdgeWalker, BaseMesh_HalfedgeWalker)
     
 #### vertex circulators ####
 
-iterator circulateVertices*(walker: BaseMesh_VertexWalker): BaseMesh_VertexWalker =
-  var startHeWalker = walker.goOutHalfedge
-  
-  if startHeWalker.handle.isValid:
-    yield startHeWalker.goToVertex
-    var walker = startHeWalker.goPrev.goOpp
+template circulatorIterators(VertexWalkerType, FaceWalkerType, EdgeWalkerType, HalfedgeWalkerType: typedesc) =
     
-    while walker.handle != startHeWalker.handle:
+  iterator circulateVertices*(walker: VertexWalkerType): VertexWalkerType =
+    var startHeWalker = walker.goOutHalfedge
+    
+    if startHeWalker.handle.isValid:
       yield startHeWalker.goToVertex
-      walker = walker.goPrev.goOpp  
-    
-iterator circulateFaces*(walker: BaseMesh_VertexWalker): BaseMesh_FaceWalker =
-  var startHeWalker = walker.goOutHalfedge
-  if startHeWalker.handle.isValid:
-    yield startHeWalker.goFace
-    var walker = startHeWalker.goPrev.goOpp
-    
-    while walker.handle != startHeWalker.handle:
+      var walker = startHeWalker.goPrev.goOpp
+      
+      while walker.handle != startHeWalker.handle:
+        yield startHeWalker.goToVertex
+        walker = walker.goPrev.goOpp  
+      
+  iterator circulateFaces*(walker: VertexWalkerType): FaceWalkerType =
+    var startHeWalker = walker.goOutHalfedge
+    if startHeWalker.handle.isValid:
       yield startHeWalker.goFace
-      walker = walker.goPrev.goOpp  
-
-iterator circulateOutEdges*(walker: BaseMesh_VertexWalker): BaseMesh_HalfedgeWalker =
-  var startHeWalker = walker.goOutHalfedge
-  if startHeWalker.handle.isValid:
-    yield startHeWalker
-    var walker = startHeWalker.goPrev.goOpp
-    
-    while walker.handle != startHeWalker.handle:
+      var walker = startHeWalker.goPrev.goOpp
+      
+      while walker.handle != startHeWalker.handle:
+        yield startHeWalker.goFace
+        walker = walker.goPrev.goOpp  
+  
+  iterator circulateOutEdges*(walker: VertexWalkerType): HalfedgeWalkerType =
+    var startHeWalker = walker.goOutHalfedge
+    if startHeWalker.handle.isValid:
       yield startHeWalker
-      walker = walker.goPrev.goOpp  
-
-iterator circulateInEdges*(walker: BaseMesh_VertexWalker): BaseMesh_HalfedgeWalker =
-  var startHeWalker = walker.goOutHalfedge
-  if startHeWalker.handle.isValid:
-    yield startHeWalker.goOpp
-    var walker = startHeWalker.goPrev.goOpp
-    
-    while walker.handle != startHeWalker.handle:
+      var walker = startHeWalker.goPrev.goOpp
+      
+      while walker.handle != startHeWalker.handle:
+        yield startHeWalker
+        walker = walker.goPrev.goOpp  
+  
+  iterator circulateInEdges*(walker: VertexWalkerType): HalfedgeWalkerType =
+    var startHeWalker = walker.goOutHalfedge
+    if startHeWalker.handle.isValid:
       yield startHeWalker.goOpp
-      walker = walker.goPrev.goOpp
+      var walker = startHeWalker.goPrev.goOpp
       
-iterator circulateEdges*(walker: VertexWalker): EdgeWalker =
-  var startHeWalker = walker.goOutHalfedge
-  if startHeWalker.handle.isValid:
-    yield startHeWalker.goEdge
-    var walker = startHeWalker.goPrev.goOpp
-    
-    while walker.handle != startHeWalker.handle:
+      while walker.handle != startHeWalker.handle:
+        yield startHeWalker.goOpp
+        walker = walker.goPrev.goOpp
+        
+  iterator circulateEdges*(walker: VertexWalkerType): EdgeWalkerType =
+    var startHeWalker = walker.goOutHalfedge
+    if startHeWalker.handle.isValid:
       yield startHeWalker.goEdge
-      walker = walker.goPrev.goOpp
+      var walker = startHeWalker.goPrev.goOpp
       
-#### face circulators ####
-
-iterator circulateInHalfedges*(walker: FaceWalker): HalfedgeWalker =
-  let startHeWalker = walker.goHalfedge
-  yield startHeWalker
-  var walker = startHeWalker.goNext
-  while walker.handle != startHeWalker.handle:
-    yield walker
-    walker = walker.goNext
-
-iterator circulateOutHalfedges*(walker: FaceWalker): HalfedgeWalker =
-  let startHeWalker = walker.goHalfedge
-  yield startHeWalker.goOpp
-  var walker = startHeWalker.goNext
-  while walker.handle != startHeWalker.handle:
-    yield walker.goOpp
-    walker = walker.goNext
-
-iterator circulateEdges*(walker: FaceWalker): EdgeWalker =
-  let startHeWalker = walker.goHalfedge
-  yield startHeWalker.goEdge
-  var walker = startHeWalker.goNext
-  while walker.handle != startHeWalker.handle:
-    yield walker.goEdge
-    walker = walker.goNext
-    
-iterator circulateFaces*(walker: FaceWalker): FaceWalker =
-  let startHeWalker = walker.goHalfedge
-  yield startHeWalker.goOpp.goFace
-  var walker = startHeWalker.goNext
-  while walker.handle != startHeWalker.handle:
-    yield walker.goOpp.goFace
-    walker = walker.goNext
-
-iterator circulateFaces*(walker: FaceWalker): VertexWalker =
-  let startHeWalker = walker.goHalfedge
-  yield startHeWalker.goToVertex
-  var walker = startHeWalker.goNext
-  while walker.handle != startHeWalker.handle:
-    yield walker.goToVertex
-    walker = walker.goNext
-
-# basically everything are pairs
-
-iterator circulateFaces*(walker: EdgeWalker): FaceWalker =
-  yield walker.goHalfedge.goFace
-  yield walker.goHalfedge.goOpp.goFace
-
-iterator circulateVertices*(walker: EdgeWalker): VertexWalker =
-  yield walker.goHalfedge.goToVertex
-  yield walker.goHalfedge.goFromVertex
-
-iterator circulateHalfedges*(walker: EdgeWalker): HalfedgeWalker =
-  yield walker.goHalfedge
-  yield walker.goHalfedge.goOpp
+      while walker.handle != startHeWalker.handle:
+        yield startHeWalker.goEdge
+        walker = walker.goPrev.goOpp
+        
+  #### face circulators ####
+  
+  iterator circulateInHalfedges*(arg: FaceWalkerType): HalfedgeWalkerType =
+    let startHeWalker = arg.goHalfedge
+    yield startHeWalker
+    var walker = startHeWalker.goNext
+    while walker.handle != startHeWalker.handle:
+      yield walker
+      walker = walker.goNext
+  
+  iterator circulateOutHalfedges*(arg: FaceWalkerType): HalfedgeWalkerType =
+    let startHeWalker = arg.goHalfedge
+    yield startHeWalker.goOpp
+    var walker = startHeWalker.goNext
+    while walker.handle != startHeWalker.handle:
+      yield walker.goOpp
+      walker = walker.goNext
+  
+  iterator circulateEdges*(arg: FaceWalkerType): EdgeWalkerType =
+    let startHeWalker = arg.goHalfedge
+    yield startHeWalker.goEdge
+    var walker = startHeWalker.goNext
+    while walker.handle != startHeWalker.handle:
+      yield walker.goEdge
+      walker = walker.goNext
+      
+  iterator circulateFaces*(arg: FaceWalkerType): FaceWalkerType =
+    let startHeWalker = arg.goHalfedge
+    yield startHeWalker.goOpp.goFace
+    var walker = startHeWalker.goNext
+    while walker.handle != startHeWalker.handle:
+      yield walker.goOpp.goFace
+      walker = walker.goNext
+  
+  iterator circulateFaces*(arg: FaceWalkerType): VertexWalkerType =
+    let startHeWalker = arg.goHalfedge
+    yield startHeWalker.goToVertex
+    var walker = startHeWalker.goNext
+    while walker.handle != startHeWalker.handle:
+      yield walker.goToVertex
+      walker = walker.goNext
+  
+  # basically everything are pairs
+  
+  iterator circulateFaces*(walker: EdgeWalkerType): FaceWalkerType =
+    yield walker.goHalfedge.goFace
+    yield walker.goHalfedge.goOpp.goFace
+  
+  iterator circulateVertices*(walker: EdgeWalkerType): VertexWalkerType =
+    yield walker.goHalfedge.goToVertex
+    yield walker.goHalfedge.goFromVertex
+  
+  iterator circulateHalfedges*(walker: EdgeWalkerType): HalfedgeWalkerType =
+    yield walker.goHalfedge
+    yield walker.goHalfedge.goOpp
+  
+walkerMethods(BaseMesh_VertexWalker, BaseMesh_FaceWalker, BaseMesh_EdgeWalker, BaseMesh_HalfedgeWalker)
+circulatorIterators(BaseMesh_VertexWalker, BaseMesh_FaceWalker, BaseMesh_EdgeWalker, BaseMesh_HalfedgeWalker)

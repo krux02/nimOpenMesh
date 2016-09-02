@@ -128,8 +128,8 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
       walkerIdent = newIdentNode(walkerNames[i])
       
     for tup in propertiesSeq:
-      let
-        typ = tup.typ
+      let typ = tup.typ
+      var 
         name = tup.name
         
       result.add quote do:
