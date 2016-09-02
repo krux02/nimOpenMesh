@@ -21,7 +21,6 @@ type
     halfedge_handle*: HalfedgeHandle
 
   BaseMesh* = object
-    #vprops, hprops, eprops, fprops, mprops: PropertyContainer
     vertices* : seq[Vertex]
     edges*    : seq[Edge]
     faces*    : seq[Face]

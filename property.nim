@@ -1,6 +1,4 @@
-import openmesh, macros
-
-import vecmath
+import openmesh, meshwalker, macros
 
 proc newObjectTypeDef(name: NimNode, recSeq: seq[tuple[name, typ: NimNode]]): NimNode =
   var recList : NimNode
@@ -52,8 +50,12 @@ proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
     result.add( (name: identDefs[0], typ: identDefs[1]) )
 
 # parameter to control export
-    
-macro createMeshType(name, argStmtList: untyped) : stmt =
+
+macro debugAst(ast: typed): stmt =
+  echo ast.repr
+  result = ast
+
+macro createMeshType*(name, argStmtList: untyped) : stmt =
   name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
   let argTypeSection = argStmtList[0]
@@ -78,7 +80,7 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
     of "HalfedgeData":
       propertiesSequences[3] = mapTypeToSeqOfMembers(typeDef)
     else:
-      error("unexpected identifier " & $ident)
+      error("unexpected " & $ident & " expect one of {VertexData, FaceData, EdgeData, HalfedgeData}")
 
   var propertiesTypes: array[4, Nimnode]
   for i,propertiesSeq in propertiesSequences:
@@ -113,12 +115,14 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
   for i, categoryName in propertyCategoryNamesUC:
     let identStr = $name.ident & "_" & categoryName & "Walker"
     walkerNames[i] = identStr
-    let identNode = newIdentNode(identStr)
+    let
+      identNode = newIdentNode(identStr)
+      HandleType = newIdentNode(categoryName & "Handle")
     result.add quote do:
       type
         `identNode`* = object
           mesh*: ptr `name`
-          handle*: VertexHandle
+          handle*: `HandleType`
 
   # create property accessors from walkers
 
@@ -128,19 +132,25 @@ macro createMeshType(name, argStmtList: untyped) : stmt =
       walkerIdent = newIdentNode(walkerNames[i])
       
     for tup in propertiesSeq:
-      let typ = tup.typ
-      var 
+      let
+        typ = tup.typ
         name = tup.name
-        
+      var nameStr = $name.ident
+      # first letter to upper case without dependency
+      if 'a' <= nameStr[0] and nameStr[0] <= 'z':
+        nameStr[0] = char(nameStr[0].int - 32)
+      let accessorIdent = newIdentNode("prop" & nameStr)
+
       result.add quote do:
-        proc `name`*(walker: `walkerIdent`): var `typ` =    
+        proc `accessorIdent`*(walker: `walkerIdent`): var `typ` =    
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
-  echo result.repr
-
-  # create walker navigation methods
+  result.add newCall(bindSym"walkerMethods", name)
   
-        
+  #result = newCall(bindSym"debugAst", result)
+  
+import vecmath
+  
 createMeshType(MyMeshType):
   type
     VertexData = object
@@ -155,66 +165,3 @@ createMeshType(MyMeshType):
 
     HalfedgeData = object
       someValue : int32
-
-# this should be generated
-
-type
-  VertexProperties = object
-    pointData    : seq[Vec4f]
-    normalData   : seq[Vec4f]
-    colorData    : seq[Vec4f]
-    texCoordData : seq[Vec2f]
-
-  FaceProperties = object
-    normalData : seq[Vec3f]
-    colorData  : seq[Vec3f]
-
-  HalfedgeProperties = object
-    someValueData : seq[int32]
-
-  EdgeProperties = object
-
-  DataMesh = object
-    vertexProperties: VertexProperties
-    faceProperties: FaceProperties
-    halfedgeProperties: HalfedgeProperties
-    edgeProperties: Edgeproperties
-    
-  HalfedgeDataWalker* = object
-    mesh: ptr DataMesh
-    handle: HalfedgeHandle
-
-  VertexDataWalker* = object
-    mesh: ptr DataMesh
-    handle: VertexHandle
-
-  FaceDataWalker* = object
-    mesh: ptr DataMesh
-    handle: FaceHandle
-
-  EdgeDataWalker* = object
-    mesh: ptr DataMesh
-    handle: EdgeHandle
-
-proc someValue(walker: HalfedgeDataWalker): var int32 =
-  walker.mesh.halfedgeProperties.someValueData[walker.handle.int]
-
-proc point*(walker: VertexDataWalker): var Vec4f =
-  walker.mesh.vertexProperties.pointData[walker.handle.int]
-
-proc normal*(walker: VertexDataWalker): var Vec4f =
-  walker.mesh.vertexProperties.normalData[walker.handle.int]
-
-proc color(walker: VertexDataWalker): var Vec4f =
-  walker.mesh.vertexProperties.colorData[walker.handle.int]
-
-proc texCoord(walker: VertexDataWalker): var Vec2f =
-  walker.mesh.vertexProperties.texCoordData[walker.handle.int]
-
-proc normal(walker: FaceDataWalker): var Vec3f =
-  walker.mesh.faceProperties.normalData[walker.handle.int]
-
-proc color(walker: FaceDataWalker): var Vec3f =
-  walker.mesh.faceProperties.colorData[walker.handle.int]
-
-
