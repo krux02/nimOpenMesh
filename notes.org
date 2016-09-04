@@ -1,0 +1,17 @@
+#+TITLE: Notes .org file
+#+AUTHOR: Arne Döring
+#+DATE: 4.9.2016
+
+* debugging tools: use iterators to create resumable function
+* generic implementation for circulators of all kind
+** easy writing of own "circulators"
+
+* consistent naming for walker edgeRef etc.
+** Walker is not a good name, Probably EdgeRef
+** Walker 
+* does it make sense that the halfedge a vertex points to, does not point back?
+* should procs be generated, that can't be called, but with documentation about what went wrong
+* test for vec3 dvec3 vec4 dvec4 as normal and point
+* should point property be renamed to poisition?
+* introduce normalize_or_z as a fallback for the case that the input might be zero
+* int argument for pow function in math

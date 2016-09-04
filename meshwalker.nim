@@ -78,7 +78,7 @@ template walkerMethodsTemplate(VertexWalkerType, FaceWalkerType, EdgeWalkerType,
         yield startHeWalker.goFace
         walker = walker.goPrev.goOpp  
   
-  iterator circulateOutEdges*(walker: VertexWalkerType): HalfedgeWalkerType =
+  iterator circulateOutHalfedges*(walker: VertexWalkerType): HalfedgeWalkerType =
     var startHeWalker = walker.goOutHalfedge
     if startHeWalker.handle.isValid:
       yield startHeWalker
@@ -88,7 +88,7 @@ template walkerMethodsTemplate(VertexWalkerType, FaceWalkerType, EdgeWalkerType,
         yield startHeWalker
         walker = walker.goPrev.goOpp  
   
-  iterator circulateInEdges*(walker: VertexWalkerType): HalfedgeWalkerType =
+  iterator circulateInHalfedges*(walker: VertexWalkerType): HalfedgeWalkerType =
     var startHeWalker = walker.goOutHalfedge
     if startHeWalker.handle.isValid:
       yield startHeWalker.goOpp
@@ -164,6 +164,13 @@ template walkerMethodsTemplate(VertexWalkerType, FaceWalkerType, EdgeWalkerType,
     yield walker.goHalfedge
     yield walker.goHalfedge.goOpp
 
+  proc valence(walker: VertexWalkerType): int =
+    for halfedge in walker.circulateOutHalfedges:
+      result += 1
+
+  proc valence(walker: FaceWalkerType): int =
+    for halfedge in walker.circulateInHalfedges:
+      result += 1
 
 macro walkerMethods*(MeshType: typed): stmt =
   let
