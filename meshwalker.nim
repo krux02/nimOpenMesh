@@ -1,6 +1,20 @@
 import macros
 
-template walkerMethods(VertexWalkerType, FaceWalkerType, EdgeWalkerType, HalfedgeWalkerType: typedesc) =
+template walkerMethodsTemplate(VertexWalkerType, FaceWalkerType, EdgeWalkerType, HalfedgeWalkerType: typedesc) =
+
+  proc connectivity(walker: HalfedgeWalkerType): Halfedge =
+    walker.mesh.edges[walker.handle.int div 2][walker.handle.int and 1]
+
+  proc connectivity(walker: VertexWalkerType): Vertex =
+    walker.mesh.vertices[walker.handle.int]
+
+  proc connectivity(walker: FaceWalkerType): Face =
+    walker.mesh.faces[walker.handle.int]
+
+  proc connectivity(walker: EdgeWalkerType): Edge =
+    walker.mesh.edges[walker.handle.int]
+
+  ## movement methods ##
     
   proc goNext*(walker: HalfedgeWalkerType): HalfedgeWalkerType =
     result.mesh = walker.mesh
@@ -40,10 +54,8 @@ template walkerMethods(VertexWalkerType, FaceWalkerType, EdgeWalkerType, Halfedg
   proc goHalfedge*(walker: EdgeWalkerType): HalfedgeWalkerType =
     result.mesh   = walker.mesh
     result.handle = HalfedgeHandle(walker.handle.int * 2)
-    
-#### vertex circulators ####
 
-template circulatorIterators(VertexWalkerType, FaceWalkerType, EdgeWalkerType, HalfedgeWalkerType: typedesc) =
+  ## circulators ##
     
   iterator circulateVertices*(walker: VertexWalkerType): VertexWalkerType =
     var startHeWalker = walker.goOutHalfedge
@@ -130,7 +142,7 @@ template circulatorIterators(VertexWalkerType, FaceWalkerType, EdgeWalkerType, H
       yield walker.goOpp.goFace
       walker = walker.goNext
   
-  iterator circulateFaces*(arg: FaceWalkerType): VertexWalkerType =
+  iterator circulateVertices*(arg: FaceWalkerType): VertexWalkerType =
     let startHeWalker = arg.goHalfedge
     yield startHeWalker.goToVertex
     var walker = startHeWalker.goNext
@@ -154,31 +166,12 @@ template circulatorIterators(VertexWalkerType, FaceWalkerType, EdgeWalkerType, H
 
 
 macro walkerMethods*(MeshType: typed): stmt =
-
   let
-    HalfedgeWalkerType = newIdentNode($MeshType.symbol & "_HalfedgeWalker")
-    VertexWalkerType   = newIdentNode($MeshType.symbol & "_VertexWalker")
-    FaceWalkerType     = newIdentNode($MeshType.symbol & "_FaceWalker")
-    EdgeWalkerType     = newIdentNode($MeshType.symbol & "_EdgeWalker")
+    HalfedgeWalkerType = ident($MeshType.symbol & "_HalfedgeWalker")
+    VertexWalkerType   = ident($MeshType.symbol & "_VertexWalker")
+    FaceWalkerType     = ident($MeshType.symbol & "_FaceWalker")
+    EdgeWalkerType     = ident($MeshType.symbol & "_EdgeWalker")
 
-  
   result = quote do:
-    proc connectivity(walker: `HalfedgeWalkerType`): Halfedge =
-      walker.mesh.edges[walker.handle.int div 2][walker.handle.int and 1]
-
-    proc connectivity(walker: `VertexWalkerType`): Vertex =
-      walker.mesh.vertices[walker.handle.int]
-
-    proc connectivity(walker: `FaceWalkerType`): Face =
-      walker.mesh.faces[walker.handle.int]
-
-    proc connectivity(walker: `EdgeWalkerType`): Edge =
-      walker.mesh.edges[walker.handle.int]
-
-    walkerMethods(      `VertexWalkerType`, `FaceWalkerType`,
-                        `EdgeWalkerType`,   `HalfedgeWalkerType`)
-    circulatorIterators(`VertexWalkerType`, `FaceWalkerType`,
-                        `EdgeWalkerType`,   `HalfedgeWalkerType`)
-
-
-
+    walkerMethodsTemplate(`VertexWalkerType`, `FaceWalkerType`,
+                          `EdgeWalkerType`,   `HalfedgeWalkerType`)
