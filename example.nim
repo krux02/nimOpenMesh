@@ -1,5 +1,7 @@
 import openmesh, vecmath, math
 
+# point and normal need to have the same type
+
 createMeshType(MyMeshType):
   type
     VertexData = object
@@ -9,15 +11,12 @@ createMeshType(MyMeshType):
       texCoord : Vec2f
 
     FaceData = object
-      normal   : Vec3f
+      normal   : Vec4f
       color    : Vec3f
 
     HalfedgeData = object
       someValue : int32
 
-
-
-      
 template has_edge_status*(mesh: typedesc[MyMeshType]): bool =
   false
 
@@ -93,14 +92,16 @@ proc is_estimated_feature_edge*(walker: MyMeshType_HalfedgeWalker, feature_angle
 proc is_not_estimated_feature_edge*(walker: MyMeshType_HalfedgeWalker, feature_angle: float): bool =
   not is_estimated_feature_edge(walker, feature_angle)
 
-proc sqrnorm(v : Vec4f) : auto =
-  dot(v,v)
+proc xyz(v: var Vec4f): var Vec3f =
+  return cast[ptr Vec3f](v.addr)[]
 
-proc `xyz=`(v: var Vec4f, val: Vec3f): void =
-  v[0] = val[0]
-  v[1] = val[1]
-  v[2] = val[2]
-  
+proc xyz(v: Vec4f): Vec3f =
+  vec3f(v[0], v[1], v[2])
+
+proc xyz(v: var Vec3f): var Vec3f = v
+
+proc xyz(v: Vec3f): Vec3f = v
+
 #proc cross(v1,v2: Vec4f): Vec4f =
 #  vec4f(cross(v1.xyz, v2.xyz), 0)
 
@@ -122,7 +123,8 @@ proc calc_edge_vector(walker: MyMeshType_EdgeWalker): auto =
   walker.goHalfedge.calc_edge_vector
     
 proc calc_edge_sqr_length(walker: MyMeshType_HalfedgeWalker): auto =
-  walker.calc_edge_vector.sqrnorm
+  let v = walker.calc_edge_vector
+  return dot(v,v)
 
 proc calc_edge_sqr_length(walker: MyMeshType_EdgeWalker): auto =
   walker.goHalfedge.calc_edge_sqr_length
@@ -145,7 +147,7 @@ proc calc_sector_normal_unnormalized*(walker: MyMeshType_HalfedgeWalker) : type(
   ## calculates the normal (non-normalized) of the face sector defined by
   ## the angle <(_in_heh,next_halfedge(_in_heh))
   let (vec0, vec1) = walker.calc_sector_vectors
-  result.xyz = cross(vec0.xyz, vec1.xyz); # (p2-p1)^(p0-p1)
+  xyz(result) = cross(vec0.xyz, vec1.xyz) # (p2-p1)^(p0-p1)
   
 proc calc_dihedral_angle(walker: MyMeshType_HalfedgeWalker) : type(walker.goToVertex.propPoint[0]) =
   if walker.goEdge.is_boundary:
@@ -178,7 +180,7 @@ proc calc_dihedral_angle_fast(walker: MyMeshType_HalfedgeWalker): type(walker.go
     
     he = walker.calc_edge_vector
     da_cos = dot(n0, n1)
-    da_sin_sign = dot(cross(n0, n1), he.xyz) #should be normalized, but we need only the sign
+    da_sin_sign = dot(cross(n0.xyz, n1.xyz), he.xyz) #should be normalized, but we need only the sign
   
   return angle(da_cos, da_sin_sign)
   
@@ -317,8 +319,7 @@ proc calc_vertex_normal_loop*(inVertex: MyMeshType_VertexWalker): type(inVertex.
     i += 1
     
   # hack: should be cross(t_v, t_w), but then the normals are reversed?
-  return cross(t_w.xyz, t_v.xyz)
-
+  result.xyz() = cross(t_w.xyz, t_v.xyz)
 
 proc calc_vertex_normal_correct*(inVertex: MyMeshType_VertexWalker): type(inVertex.propNormal) =
   ## there is no correct way to calculate the vertex normal
@@ -336,6 +337,6 @@ proc calc_vertex_normal_correct*(inVertex: MyMeshType_VertexWalker): type(inVert
     let outHalfedge = inHalfedge.goNext
     let out_he_vec = outHalfedge.calc_edge_vector
 
-    result.xyz = result.xyz + cross(in_he_vec.xyz, out_he_vec.xyz); # sector area is taken into account
+    result.xyz() += cross(in_he_vec.xyz, out_he_vec.xyz); # sector area is taken into account
 
     in_he_vec = - out_he_vec; # change the orientation

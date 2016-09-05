@@ -15,3 +15,7 @@
 * should point property be renamed to poisition?
 * introduce normalize_or_z as a fallback for the case that the input might be zero
 * int argument for pow function in math
+* vector library
+** xyz, yz etc accessors as mutable references
+** yxz, wzx swizzingl as getter setter procs
+

@@ -51,7 +51,7 @@ import math
       - vertex tangents on the limit surface
 ]#
 
-const cache_size = 100
+const cache_size = 128
 
 type Scalar = float64
     
@@ -76,10 +76,10 @@ proc compute_step_weight(valence: int): Scalar =
 
 
 proc compute_tang0_weight(valence, ver_id: int): Scalar =
-  return cos(2*Pi*Scalar(ver_id) / Scalar(valence))
+  return cos(2 * Scalar(Pi) * Scalar(ver_id) / Scalar(valence))
 
 proc compute_tang1_weight(valence, ver_id: int): Scalar =
-  return sin(2 * Pi * Scalar(ver_id) / Scalar(valence))
+  return sin(2 * Scalar(Pi) * Scalar(ver_id) / Scalar(valence))
 
 
 # cache weights
