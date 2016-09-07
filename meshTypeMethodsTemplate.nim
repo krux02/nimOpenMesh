@@ -327,7 +327,7 @@ template meshTypeMethodsTemplate*(MeshType: typedesc) =
       n0 = halfedge.calc_sector_normal_unnormalized
       n1 = halfedge.goOpp.calc_sector_normal_unnormalized
       he = halfedge.calc_edge_vector
-      denom = n0.norm * n1.norm
+      denom = length(n0) * length(n1)
            
     if denom == 0:
       return 0

@@ -1,5 +1,5 @@
 #this is supposed to be a nim port of open mesh.
-import macros, meshwalker
+import macros, meshTypeMethodsTemplate
 
 type
   VertexHandle*      = distinct int

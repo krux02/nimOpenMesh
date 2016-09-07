@@ -1,14 +1,16 @@
-import openmesh, meshwalker, vecmath
+import openmesh, vecmath
 
 proc xyz(v: var Vec4f): var Vec3f =
-  return cast[ptr Vec3f](v.addr)[]
+  return cast[ptr Vec3[float32]](v.addr)[]
 
 proc xyz(v: Vec4f): Vec3f =
-  vec3f(v[0], v[1], v[2])
+  result[0] = v[0]
+  result[1] = v[1]
+  result[2] = v[2]
 
-proc xyz(v: var Vec3f): var Vec3f = v
+#proc xyz(v: var Vec3f): var Vec3f = v
 
-proc xyz(v: Vec3f): Vec3f = v
+#proc xyz(v: Vec3f): Vec3f = v
 
 # point and normal need to have the same type
   
@@ -29,6 +31,3 @@ createMeshType(MyMeshType):
 
     EdgeData = object
       someValue3 : int32
-
-
-#meshTypeMethodsTemplate(MyMeshType)
