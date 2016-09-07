@@ -6,17 +6,16 @@
 * TODO generic implementation for circulators of all kind
 ** TODO easy writing of own "circulators"
 
-* TODO consistent naming for walker edgeRef etc.
-** TODO Walker is not a good name, Probably EdgeRef
-** TODO Walker 
+* TODO consistent naming for walker edgeRef 
 * TODO does it make sense that the halfedge a vertex points to, does not point back?
 * TODO should procs be generated, that can't be called, but with documentation about what went wrong
 * TODO test for vec3 dvec3 vec4 dvec4 as normal and point
 ** TODO test without point normal properties
-* TODO should point property be renamed to poisition?
+* TODO should point property be renamed to position?
 * TODO introduce normalize_or_z as a fallback for the case that the input might be zero
 * TODO int argument for pow function in math
 * TODO vector library
 ** TODO xyz, yz etc accessors as mutable references
 ** TODO yxz, wzx swizzingl as getter setter procs
 * TODO rename calc_edge_normal calc_face_normal etc to calcNormal, calcFace etc to be consistent with propNormal and propPoint
+* TODO sparse properties

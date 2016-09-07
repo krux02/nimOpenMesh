@@ -101,10 +101,10 @@ macro createMeshType*(name, argStmtList: untyped): auto =
 
   # create walker types
   
-  var walkerNames : array[4, string]  
+  var typeNames : array[4, string]  
   for i, categoryName in propertyCategoryNamesUC:
-    let identStr = $name.ident & "_" & categoryName & "Walker"
-    walkerNames[i] = identStr
+    let identStr = $name.ident & "_" & categoryName & "Ref"
+    typeNames[i] = identStr
     let
       identNode = ident(identStr)
       HandleType = ident(categoryName & "Handle")
@@ -119,7 +119,7 @@ macro createMeshType*(name, argStmtList: untyped): auto =
   for i, propertiesSeq in propertiesSequences:
     let
       propertiesName = ident(propertyCategoryNames[i] & "Properties")
-      walkerIdent = ident(walkerNames[i])
+      refIdent = ident(typeNames[i])
       
     for tup in propertiesSeq:
       let
@@ -132,7 +132,7 @@ macro createMeshType*(name, argStmtList: untyped): auto =
       let accessorIdent = ident("prop" & nameStr)
 
       result.add quote do:
-        proc `accessorIdent`*(walker: `walkerIdent`): var `typ` =    
+        proc `accessorIdent`*(walker: `refIdent`): var `typ` =    
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
   result.add newCall(bindSym"walkerMethods", name)

@@ -1,184 +1,183 @@
 import macros
 
-template walkerMethodsTemplate(VertexWalkerType, FaceWalkerType, EdgeWalkerType, HalfedgeWalkerType: typedesc) =
+template walkerMethodsTemplate(VertexRefType, FaceRefType, EdgeRefType, HalfedgeRefType: typedesc) =
 
-  proc connectivity(walker: HalfedgeWalkerType): Halfedge =
-    walker.mesh.edges[walker.handle.int div 2][walker.handle.int and 1]
+  proc connectivity(halfedge: HalfedgeRefType): Halfedge =
+    halfedge.mesh.edges[halfedge.handle.int div 2][halfedge.handle.int and 1]
 
-  proc connectivity(walker: VertexWalkerType): Vertex =
-    walker.mesh.vertices[walker.handle.int]
+  proc connectivity(vertes: VertexRefType): Vertex =
+    vertes.mesh.vertices[vertes.handle.int]
 
-  proc connectivity(walker: FaceWalkerType): Face =
-    walker.mesh.faces[walker.handle.int]
+  proc connectivity(face: FaceRefType): Face =
+    face.mesh.faces[face.handle.int]
 
-  proc connectivity(walker: EdgeWalkerType): Edge =
-    walker.mesh.edges[walker.handle.int]
+  proc connectivity(edge: EdgeRefType): Edge =
+    edge.mesh.edges[edge.handle.int]
 
   ## movement methods ##
     
-  proc goNext*(walker: HalfedgeWalkerType): HalfedgeWalkerType =
-    result.mesh = walker.mesh
-    result.handle = walker.connectivity.next_halfedge_handle
+  proc goNext*(halfedge: HalfedgeRefType): HalfedgeRefType =
+    result.mesh = halfedge.mesh
+    result.handle = halfedge.connectivity.next_halfedge_handle
     
-  proc goPrev*(walker: HalfedgeWalkerType): HalfedgeWalkerType =
-    result.mesh = walker.mesh
-    result.handle = walker.connectivity.prev_halfedge_handle
+  proc goPrev*(halfedge: HalfedgeRefType): HalfedgeRefType =
+    result.mesh = halfedge.mesh
+    result.handle = halfedge.connectivity.prev_halfedge_handle
     
-  proc goOpp*(walker: HalfedgeWalkerType): HalfedgeWalkerType =
-    result.mesh = walker.mesh
-    result.handle = HalfedgeHandle(walker.handle.int xor 1)
+  proc goOpp*(halfedge: HalfedgeRefType): HalfedgeRefType =
+    result.mesh = halfedge.mesh
+    result.handle = HalfedgeHandle(halfedge.handle.int xor 1)
     
-  proc goToVertex*(walker: HalfedgeWalkerType): VertexWalkerType =
-    result.mesh = walker.mesh
-    result.handle = walker.connectivity.vertex_handle
+  proc goToVertex*(halfedge: HalfedgeRefType): VertexRefType =
+    result.mesh = halfedge.mesh
+    result.handle = halfedge.connectivity.vertex_handle
     
-  proc goFromVertex*(walker: HalfedgeWalkerType): VertexWalkerType =
-    walker.goOpp.goToVertex
+  proc goFromVertex*(halfedge: HalfedgeRefType): VertexRefType =
+    halfedge.goOpp.goToVertex
     
-  proc goFace*(walker: HalfedgeWalkerType): FaceWalkerType =
-    result.mesh = walker.mesh
-    result.handle = walker.connectivity.face_handle
+  proc goFace*(halfedge: HalfedgeRefType): FaceRefType =
+    result.mesh = halfedge.mesh
+    result.handle = halfedge.connectivity.face_handle
     
-  proc goEdge*(walker: HalfedgeWalkerType): EdgeWalkerType =
-    result.mesh = walker.mesh
-    result.handle = EdgeHandle(walker.handle.int div 2)
+  proc goEdge*(halfedge: HalfedgeRefType): EdgeRefType =
+    result.mesh = halfedge.mesh
+    result.handle = EdgeHandle(halfedge.handle.int div 2)
     
-  proc goOutHalfedge*(walker: VertexWalkerType): HalfedgeWalkerType =
-    result.mesh   = walker.mesh
-    result.handle = walker.connectivity.out_halfedge_handle
+  proc goOutHalfedge*(vertex: VertexRefType): HalfedgeRefType =
+    result.mesh   = vertex.mesh
+    result.handle = vertex.connectivity.out_halfedge_handle
     
-  proc goHalfedge*(walker: FaceWalkerType): HalfedgeWalkerType =
-    result.mesh   = walker.mesh
-    result.handle = walker.connectivity.halfedge_handle
+  proc goHalfedge*(face: FaceRefType): HalfedgeRefType =
+    result.mesh   = face.mesh
+    result.handle = face.connectivity.halfedge_handle
     
-  proc goHalfedge*(walker: EdgeWalkerType): HalfedgeWalkerType =
-    result.mesh   = walker.mesh
-    result.handle = HalfedgeHandle(walker.handle.int * 2)
+  proc goHalfedge*(edge: EdgeRefType): HalfedgeRefType =
+    result.mesh   = edge.mesh
+    result.handle = HalfedgeHandle(edge.handle.int * 2)
 
   ## circulators ##
     
-  iterator circulateVertices*(walker: VertexWalkerType): VertexWalkerType =
-    var startHeWalker = walker.goOutHalfedge
-    
-    if startHeWalker.handle.isValid:
-      yield startHeWalker.goToVertex
-      var walker = startHeWalker.goPrev.goOpp
+  iterator circulateVertices*(vertex: VertexRefType): VertexRefType =
+    let startHalfedge = vertex.goOutHalfedge
+    if startHalfedge.handle.isValid:
+      yield startHalfedge.goToVertex
+      var walker = startHalfedge.goPrev.goOpp
       
-      while walker.handle != startHeWalker.handle:
-        yield startHeWalker.goToVertex
+      while walker.handle != startHalfedge.handle:
+        yield walker.goToVertex
         walker = walker.goPrev.goOpp  
       
-  iterator circulateFaces*(walker: VertexWalkerType): FaceWalkerType =
-    var startHeWalker = walker.goOutHalfedge
-    if startHeWalker.handle.isValid:
-      yield startHeWalker.goFace
-      var walker = startHeWalker.goPrev.goOpp
+  iterator circulateFaces*(vertex: VertexRefType): FaceRefType =
+    let startHalfedge = vertex.goOutHalfedge
+    if startHalfedge.handle.isValid:
+      yield startHalfedge.goFace
+      var walker = startHalfedge.goPrev.goOpp
       
-      while walker.handle != startHeWalker.handle:
-        yield startHeWalker.goFace
-        walker = walker.goPrev.goOpp  
-  
-  iterator circulateOutHalfedges*(walker: VertexWalkerType): HalfedgeWalkerType =
-    var startHeWalker = walker.goOutHalfedge
-    if startHeWalker.handle.isValid:
-      yield startHeWalker
-      var walker = startHeWalker.goPrev.goOpp
-      
-      while walker.handle != startHeWalker.handle:
-        yield startHeWalker
+      while walker.handle != startHalfedge.handle:
+        yield walker.goFace
         walker = walker.goPrev.goOpp  
   
-  iterator circulateInHalfedges*(walker: VertexWalkerType): HalfedgeWalkerType =
-    var startHeWalker = walker.goOutHalfedge
-    if startHeWalker.handle.isValid:
-      yield startHeWalker.goOpp
-      var walker = startHeWalker.goPrev.goOpp
+  iterator circulateOutHalfedges*(vertex: VertexRefType): HalfedgeRefType =
+    let startHalfedge = vertex.goOutHalfedge
+    if startHalfedge.handle.isValid:
+      yield startHalfedge
+      var walker = startHalfedge.goPrev.goOpp
       
-      while walker.handle != startHeWalker.handle:
-        yield startHeWalker.goOpp
+      while walker.handle != startHalfedge.handle:
+        yield walker
+        walker = walker.goPrev.goOpp  
+  
+  iterator circulateInHalfedges*(vertex: VertexRefType): HalfedgeRefType =
+    let startHalfedge = vertex.goOutHalfedge
+    if startHalfedge.handle.isValid:
+      yield startHalfedge.goOpp
+      var walker = startHalfedge.goPrev.goOpp
+      
+      while walker.handle != startHalfedge.handle:
+        yield walker.goOpp
         walker = walker.goPrev.goOpp
         
-  iterator circulateEdges*(walker: VertexWalkerType): EdgeWalkerType =
-    var startHeWalker = walker.goOutHalfedge
-    if startHeWalker.handle.isValid:
-      yield startHeWalker.goEdge
-      var walker = startHeWalker.goPrev.goOpp
+  iterator circulateEdges*(vertex: VertexRefType): EdgeRefType =
+    let startHalfedge = vertex.goOutHalfedge
+    if startHalfedge.handle.isValid:
+      yield startHalfedge.goEdge
+      var walker = startHalfedge.goPrev.goOpp
       
-      while walker.handle != startHeWalker.handle:
-        yield startHeWalker.goEdge
+      while walker.handle != startHalfedge.handle:
+        yield walker.goEdge
         walker = walker.goPrev.goOpp
         
   #### face circulators ####
   
-  iterator circulateInHalfedges*(arg: FaceWalkerType): HalfedgeWalkerType =
-    let startHeWalker = arg.goHalfedge
-    yield startHeWalker
-    var walker = startHeWalker.goNext
-    while walker.handle != startHeWalker.handle:
+  iterator circulateInHalfedges*(face: FaceRefType): HalfedgeRefType =
+    let startHalfedge = face.goHalfedge
+    yield startHalfedge
+    var walker = startHalfedge.goNext
+    while walker.handle != startHalfedge.handle:
       yield walker
       walker = walker.goNext
   
-  iterator circulateOutHalfedges*(arg: FaceWalkerType): HalfedgeWalkerType =
-    let startHeWalker = arg.goHalfedge
-    yield startHeWalker.goOpp
-    var walker = startHeWalker.goNext
-    while walker.handle != startHeWalker.handle:
+  iterator circulateOutHalfedges*(face: FaceRefType): HalfedgeRefType =
+    let startHalfedge = face.goHalfedge
+    yield startHalfedge.goOpp
+    var walker = startHalfedge.goNext
+    while walker.handle != startHalfedge.handle:
       yield walker.goOpp
       walker = walker.goNext
   
-  iterator circulateEdges*(arg: FaceWalkerType): EdgeWalkerType =
-    let startHeWalker = arg.goHalfedge
-    yield startHeWalker.goEdge
-    var walker = startHeWalker.goNext
-    while walker.handle != startHeWalker.handle:
+  iterator circulateEdges*(face: FaceRefType): EdgeRefType =
+    let startHalfedge = face.goHalfedge
+    yield startHalfedge.goEdge
+    var walker = startHalfedge.goNext
+    while walker.handle != startHalfedge.handle:
       yield walker.goEdge
       walker = walker.goNext
       
-  iterator circulateFaces*(arg: FaceWalkerType): FaceWalkerType =
-    let startHeWalker = arg.goHalfedge
-    yield startHeWalker.goOpp.goFace
-    var walker = startHeWalker.goNext
-    while walker.handle != startHeWalker.handle:
+  iterator circulateFaces*(face: FaceRefType): FaceRefType =
+    let startHalfedge = face.goHalfedge
+    yield startHalfedge.goOpp.goFace
+    var walker = startHalfedge.goNext
+    while walker.handle != startHalfedge.handle:
       yield walker.goOpp.goFace
       walker = walker.goNext
   
-  iterator circulateVertices*(arg: FaceWalkerType): VertexWalkerType =
-    let startHeWalker = arg.goHalfedge
-    yield startHeWalker.goToVertex
-    var walker = startHeWalker.goNext
-    while walker.handle != startHeWalker.handle:
+  iterator circulateVertices*(face: FaceRefType): VertexRefType =
+    let startHalfedge = face.goHalfedge
+    yield startHalfedge.goToVertex
+    var walker = startHalfedge.goNext
+    while walker.handle != startHalfedge.handle:
       yield walker.goToVertex
       walker = walker.goNext
   
   # basically everything are pairs
   
-  iterator circulateFaces*(walker: EdgeWalkerType): FaceWalkerType =
-    yield walker.goHalfedge.goFace
-    yield walker.goHalfedge.goOpp.goFace
+  iterator circulateFaces*(edge: EdgeRefType): FaceRefType =
+    yield edge.goHalfedge.goFace
+    yield edge.goHalfedge.goOpp.goFace
   
-  iterator circulateVertices*(walker: EdgeWalkerType): VertexWalkerType =
-    yield walker.goHalfedge.goToVertex
-    yield walker.goHalfedge.goFromVertex
+  iterator circulateVertices*(edge: EdgeRefType): VertexRefType =
+    yield edge.goHalfedge.goToVertex
+    yield edge.goHalfedge.goFromVertex
   
-  iterator circulateHalfedges*(walker: EdgeWalkerType): HalfedgeWalkerType =
-    yield walker.goHalfedge
-    yield walker.goHalfedge.goOpp
+  iterator circulateHalfedges*(edge: EdgeRefType): HalfedgeRefType =
+    yield edge.goHalfedge
+    yield edge.goHalfedge.goOpp
 
-  proc valence(walker: VertexWalkerType): int =
-    for halfedge in walker.circulateOutHalfedges:
+  proc valence(vertex: VertexRefType): int =
+    for halfedge in vertex.circulateOutHalfedges:
       result += 1
 
-  proc valence(walker: FaceWalkerType): int =
-    for halfedge in walker.circulateInHalfedges:
+  proc valence(face: FaceRefType): int =
+    for halfedge in face.circulateInHalfedges:
       result += 1
 
-macro walkerMethods*(MeshType: typed): stmt =
+macro walkerMethods*(MeshType: typed): untyped =
   let
-    HalfedgeWalkerType = ident($MeshType.symbol & "_HalfedgeWalker")
-    VertexWalkerType   = ident($MeshType.symbol & "_VertexWalker")
-    FaceWalkerType     = ident($MeshType.symbol & "_FaceWalker")
-    EdgeWalkerType     = ident($MeshType.symbol & "_EdgeWalker")
+    HalfedgeRefType = ident($MeshType.symbol & "_HalfedgeRef")
+    VertexRefType   = ident($MeshType.symbol & "_VertexRef")
+    FaceRefType     = ident($MeshType.symbol & "_FaceRef")
+    EdgeRefType     = ident($MeshType.symbol & "_EdgeRef")
 
   result = quote do:
-    walkerMethodsTemplate(`VertexWalkerType`, `FaceWalkerType`,
-                          `EdgeWalkerType`,   `HalfedgeWalkerType`)
+    walkerMethodsTemplate(`VertexRefType`, `FaceRefType`,
+                          `EdgeRefType`,   `HalfedgeRefType`)
