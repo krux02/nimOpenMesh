@@ -6,7 +6,7 @@ proc angle(cos_angle, sin_angle: float32): float32 =
   if sin_angle < 0:
     result *= -1
 
-template meshTypeMethodsTemplate(MeshType: typedesc) =
+template meshTypeMethodsTemplate*(MeshType: typedesc) =
 
   proc connectivity(halfedge: MeshType.HalfedgeRef): Halfedge =
     halfedge.mesh.edges[halfedge.handle.int div 2][halfedge.handle.int and 1]
@@ -17,8 +17,9 @@ template meshTypeMethodsTemplate(MeshType: typedesc) =
   proc connectivity(face: MeshType.FaceRef): Face =
     face.mesh.faces[face.handle.int]
 
-  proc connectivity(edge: MeshType.EdgeRef): Edge =
-    edge.mesh.edges[edge.handle.int]
+  # is never used
+  #proc connectivity(edge: MeshType.EdgeRef): Edge =
+  #  edge.mesh.edges[edge.handle.int]
 
   ## movement methods ##
     
@@ -489,23 +490,3 @@ template meshTypeMethodsTemplate(MeshType: typedesc) =
   
       in_he_vec = - out_he_vec; # change the orientation
 
-import macros
-          
-macro meshTypeMethods*(MeshType: typed): untyped =
-  let
-    HalfedgeRefType = ident($MeshType.symbol & "_HalfedgeRef")
-    VertexRefType   = ident($MeshType.symbol & "_VertexRef")
-    FaceRefType     = ident($MeshType.symbol & "_FaceRef")
-    EdgeRefType     = ident($MeshType.symbol & "_EdgeRef")
-
-  result = quote do:
-    template HalfedgeRef*(tpe: typedesc[`MeshType`]): typedesc =
-      `HalfedgeRefType`
-    template VertexRef*(tpe: typedesc[`MeshType`]): typedesc =
-      `VertexRefType`
-    template FaceRef*(tpe: typedesc[`MeshType`]): typedesc =
-      `FaceRefType`
-    template EdgeRef*(tpe: typedesc[`MeshType`]): typedesc =
-      `EdgeRefType`
-      
-    meshTypeMethodsTemplate(`MeshType`)

@@ -1,5 +1,5 @@
 #this is supposed to be a nim port of open mesh.
-import macros
+import macros, meshwalker
 
 type
   VertexHandle*      = distinct int
@@ -25,7 +25,7 @@ type
     vertices* : seq[Vertex]
     edges*    : seq[Edge]
     faces*    : seq[Face]
-
+    
 template handleProcs(HandleType: typedesc) =
   proc `==`*(handleA, handleB: HandleType): bool =
     handleA == handleB
@@ -62,7 +62,7 @@ macro propertyType(tpe: typed; propertyType, ident: untyped): untyped =
         for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
           if innerIdentDefs[0].ident == ident.ident:
             return innerIdentDefs[1][1]
-
+            
 template vertexPropertyType*(tpe: typedesc; ident: untyped): typedesc =
   propertyType(MyMeshType, vertexProperties, point)
 
@@ -125,11 +125,8 @@ proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
 
     result.add( (name: identDefs[0], typ: identDefs[1]) )
 
-# parameter to control export
-
-include meshwalker
-    
 macro createMeshType*(name, argStmtList: untyped): auto =
+
   name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
   let argTypeSection = argStmtList[0]
@@ -185,6 +182,9 @@ macro createMeshType*(name, argStmtList: untyped): auto =
   var typeNames : array[4, string]  
   for i, categoryName in propertyCategoryNamesUC:
     let identStr = $name.ident & "_" & categoryName & "Ref"
+    
+    let typeAccessorName = newIdentNode(categoryName & "Ref")
+    
     typeNames[i] = identStr
     let
       identNode = ident(identStr)
@@ -194,6 +194,10 @@ macro createMeshType*(name, argStmtList: untyped): auto =
         `identNode`* = object
           mesh*: ptr `name`
           handle*: `HandleType`
+
+      template `typeAccessorName`*(tpe: typedesc[`name`]): typedesc =
+        `identNode`
+        
 
   # create property accessors from walkers
 
@@ -216,7 +220,13 @@ macro createMeshType*(name, argStmtList: untyped): auto =
         proc `accessorIdent`*(walker: `refIdent`): var `typ` =    
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
-  result.add newCall(bindSym"meshTypeMethods", name)
+  result.add quote do:
+    meshTypeMethodsTemplate(`name`)
+    
+
   #echo result.repr
-  result = newCall(bindSym"debugAst", result)
+  #result = newCall(bindSym"debugAst", result)
+
+
+
 
