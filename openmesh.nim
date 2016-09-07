@@ -40,13 +40,13 @@ handleProcs(HalfedgeHandle)
 handleProcs(EdgeHandle)
 handleProcs(FaceHandle)
 
-macro debugAst*(ast: typed): stmt =
+macro debugAst*(ast: typed): untyped =
   echo ast.repr
   result = ast
 
 include meshwalker, property
 
-macro createMeshType*(name, argStmtList: untyped) : stmt =
+macro createMeshType*(name, argStmtList: untyped): auto =
   name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
   let argTypeSection = argStmtList[0]
@@ -139,3 +139,27 @@ macro createMeshType*(name, argStmtList: untyped) : stmt =
 
   #echo result.repr
   #result = newCall(bindSym"debugAst", result)
+
+
+macro hasProperty(tpe: typed; propertyType, ident: untyped): bool =
+  block b:
+    for identDefs in tpe.symbol.getImpl[2][2]:
+      if identDefs[0][1].ident == propertyType.ident:
+        for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
+          if innerIdentDefs[0].ident == ident.ident:
+            result = newLit(true)
+            break b
+    result = newLit(false)
+      
+template hasVertexProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, vertexProperties, ident)
+
+template hasFaceProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, faceProperties, ident)
+
+template hasHalfedgeProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, halfedgeProperties, ident)
+
+template hasEdgeProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, edgeProperties, ident)
+

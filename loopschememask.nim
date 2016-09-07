@@ -57,7 +57,7 @@ type Scalar = float64
     
 proc compute_proj_weight(valence: int): Scalar =
   let
-    denom =   3 + 2 * cos(2 * Scalar(Pi) / Scalar(valence))
+    denom =   3 + 2 * cos(Scalar(Tau) / Scalar(valence))
     weight = (64 * Scalar(valence)) / (40 - denom*denom) - Scalar(valence)
   return weight
 
@@ -76,10 +76,10 @@ proc compute_step_weight(valence: int): Scalar =
 
 
 proc compute_tang0_weight(valence, ver_id: int): Scalar =
-  return cos(2 * Scalar(Pi) * Scalar(ver_id) / Scalar(valence))
+  return cos(Scalar(Tau) * Scalar(ver_id) / Scalar(valence))
 
 proc compute_tang1_weight(valence, ver_id: int): Scalar =
-  return sin(2 * Scalar(Pi) * Scalar(ver_id) / Scalar(valence))
+  return sin(Scalar(Tau) * Scalar(ver_id) / Scalar(valence))
 
 
 # cache weights
@@ -132,7 +132,6 @@ proc tang1_weight*(valence, vertex_id: int): Scalar =
 
 proc dump*(max_valency: int = cache_size - 1): void =
   assert(max_valency < cache_size)
-  #Console::printf("(k : pw_k, lw_k): ");
   for i in 0 .. max_valency:
     stdout.write("(", i, " : ", proj_weight(i), ", ", limit_weight(i), ", ", step_weight(i,1), "), ")
   echo()
