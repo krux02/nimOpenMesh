@@ -26,17 +26,18 @@ createMeshType(MyMeshType):
 
     HalfedgeData = object
       someValue1 : int32
-  
-proc is_boundary*(halfedge: MyMeshType_HalfedgeRef): bool =
+
+#[
+proc is_boundary*(halfedge: MyMeshType.HalfedgeRef): bool =
   return not halfedge.goFace.handle.isValid
 
-proc is_boundary*(edge: MyMeshType_EdgeRef): bool =
+proc is_boundary*(edge: MyMeshType.EdgeRef): bool =
   for halfedge in edge.circulateHalfedges:
     if halfedge.is_boundary:
       return true
   return false
  
-proc is_boundary*(vertex: MyMeshType_VertexRef): bool =
+proc is_boundary*(vertex: MyMeshType.VertexRef): bool =
   ## Checks if the associated halfedge (which would on a boundary be the outside
   ## halfedge), is connected to a face. Which is equivalent, if the vertex is
   ## at the boundary of the mesh, as OpenMesh will make sure, that if there is a
@@ -46,7 +47,7 @@ proc is_boundary*(vertex: MyMeshType_VertexRef): bool =
   let heh = vertex.goOutHalfedge
   return heh.handle.is_invalid or heh.goFace.handle.is_invalid
   
-proc is_boundary*(face: MyMeshType_FaceRef, check_vertex: bool = false): bool =
+proc is_boundary*(face: MyMeshType.FaceRef, check_vertex: bool = false): bool =
   ## Is face ``faceRef`` at boundary, i.e. is one of its edges (or vertices)
   ## a boundary edge?
   ##
@@ -64,16 +65,16 @@ proc is_boundary*(face: MyMeshType_FaceRef, check_vertex: bool = false): bool =
          
   return false
 
-proc is_not_boundary*(face: MyMeshType_FaceRef, check_vertex: bool = false): bool =
+proc is_not_boundary*(face: MyMeshType.FaceRef, check_vertex: bool = false): bool =
   not is_boundary(face, check_vertex)
-proc is_not_boundary*(vertex: MyMeshType_VertexRef): bool =
+proc is_not_boundary*(vertex: MyMeshType.VertexRef): bool =
   not is_boundary(vertex)
 proc is_not_boundary*(edge: MyMeshType_EdgeRef): bool =
   not is_boundary(edge)
-proc is_not_boundary*(halfedge: MyMeshType_HalfedgeRef): bool =
+proc is_not_boundary*(halfedge: MyMeshType.HalfedgeRef): bool =
   not is_boundary(halfedge)
 
-proc calc_face_normal(face: MyMeshType_FaceRef): type(face.goHalfedge.goToVertex.propPoint) =
+proc calc_face_normal(face: MyMeshType.FaceRef): vertexPropertyType(MyMeshType,point) =
   assert(face.goHalfedge.handle.isValid)
   # http://www.opengl.org/wiki/Calculating_a_Surface_Normal
   
@@ -95,14 +96,14 @@ proc calc_face_normal(face: MyMeshType_FaceRef): type(face.goHalfedge.goToVertex
     result = result / length
 
   
-proc getNormal(face: MyMeshType_FaceRef) : type(face.goHalfedge.goToVertex.propPoint) =
+proc getNormal(face: MyMeshType.FaceRef) : MyMeshType.vertexPropertyType(point) =
   ## Either returns the normal property when available, or calculates it, when the property is not available
   when hasFaceProperty(MyMeshType, normal):
     return face.propNormal
   else:
     return face.calc_face_normal
 
-proc is_estimated_feature_edge*(halfedge: MyMeshType_HalfedgeRef, feature_angle: float): bool =
+proc is_estimated_feature_edge*(halfedge: MyMeshType.HalfedgeRef, feature_angle: float): bool =
   ## uses face normal attribute, when available
   let edge = halfedge.goEdge
 
@@ -120,7 +121,7 @@ proc is_estimated_feature_edge*(halfedge: MyMeshType_HalfedgeRef, feature_angle:
 
   return dot(faceNormal0,faceNormal1) < cos(feature_angle)
 
-proc is_not_estimated_feature_edge*(halfedge: MyMeshType_HalfedgeRef, feature_angle: float): bool =
+proc is_not_estimated_feature_edge*(halfedge: MyMeshType.HalfedgeRef, feature_angle: float): bool =
   not is_estimated_feature_edge(halfedge, feature_angle)
 
 #proc cross(v1,v2: Vec4f): Vec4f =
@@ -133,7 +134,7 @@ proc angle(cos_angle, sin_angle: float32): float32 =
     result *= -1
   
 
-proc calc_edge_vector*(halfedge: MyMeshType_HalfedgeRef): auto =
+proc calc_edge_vector*(halfedge: MyMeshType.HalfedgeRef): auto =
   ## Calculates the edge vector as the difference of the
   ## the points defined by to_vertex_handle and from_vertex_handle
   halfedge.goToVertex.propPoint - halfedge.goFromVertex.propPoint
@@ -143,20 +144,20 @@ proc calc_edge_vector*(edge: MyMeshType_EdgeRef): auto =
   ## the points defined by to_vertex_handle and from_vertex_handle
   edge.goHalfedge.calc_edge_vector
     
-proc calc_edge_sqr_length*(halfedge: MyMeshType_HalfedgeRef): auto =
+proc calc_edge_sqr_length*(halfedge: MyMeshType.HalfedgeRef): auto =
   let v = halfedge.calc_edge_vector
   return dot(v,v)
 
 proc calc_edge_sqr_length*(edge: MyMeshType_EdgeRef): auto =
   edge.goHalfedge.calc_edge_sqr_length
   
-proc calc_edge_length*(halfedge: MyMeshType_HalfedgeRef): auto =
+proc calc_edge_length*(halfedge: MyMeshType.HalfedgeRef): auto =
   halfedge.calc_edge_sqr_length.sqrt
   
 proc calc_edge_length*(edge: MyMeshType_EdgeRef): auto =
   edge.goHalfedge.calc_edge_length
 
-proc calc_sector_vectors*(halfedge: MyMeshType_HalfedgeRef) : tuple[vec0, vec1: type(halfedge.goToVertex.propPoint)] =
+proc calc_sector_vectors*(halfedge: MyMeshType.HalfedgeRef) : tuple[vec0, vec1: MyMeshType.vertexPropertyType(point)] =
   ## defines a consistent representation of a sector geometry:
   ## the halfedge _in_heh defines the sector orientation
   ## the vertex pointed by _in_heh defines the sector center
@@ -164,13 +165,13 @@ proc calc_sector_vectors*(halfedge: MyMeshType_HalfedgeRef) : tuple[vec0, vec1: 
   result.vec0 = halfedge.goNext.calc_edge_vector # p2 - p1
   result.vec1 = halfedge.goOpp.calc_edge_vector  # p0 - p1
 
-proc calc_sector_normal_unnormalized*(halfedge: MyMeshType_HalfedgeRef) : type(halfedge.goToVertex.propPoint) =
+proc calc_sector_normal_unnormalized*(halfedge: MyMeshType.HalfedgeRef) : MyMeshType.vertexPropertyType(point) =
   ## calculates the normal (non-normalized) of the face sector defined by
   ## the angle <(_in_heh,next_halfedge(_in_heh))
   let (vec0, vec1) = halfedge.calc_sector_vectors
   xyz(result) = cross(vec0.xyz, vec1.xyz) # (p2-p1)^(p0-p1)
   
-proc calc_dihedral_angle*(halfedge: MyMeshType_HalfedgeRef) : type(halfedge.goToVertex.propPoint[0]) =
+proc calc_dihedral_angle*(halfedge: MyMeshType.HalfedgeRef) : MyMeshType.vertexPropertyType(point).T =
   if halfedge.goEdge.is_boundary:
     return 0
 
@@ -190,7 +191,7 @@ proc calc_dihedral_angle*(halfedge: MyMeshType_HalfedgeRef) : type(halfedge.goTo
 
   return angle(da_cos, da_sin_sign)
 
-proc calc_dihedral_angle_fast*(halfedge: MyMeshType_HalfedgeRef): type(halfedge.goToVertex.propPoint[0]) =
+proc calc_dihedral_angle_fast*(halfedge: MyMeshType.HalfedgeRef): MyMeshType.vertexPropertyType(point).T =
   ## Calculates the dihedral angle on the halfedge.
   ## Attention Needs the Attributes::Normal attribute for faces.
   if halfedge.goEdge.is_boundary:
@@ -206,7 +207,7 @@ proc calc_dihedral_angle_fast*(halfedge: MyMeshType_HalfedgeRef): type(halfedge.
   
   return angle(da_cos, da_sin_sign)
   
-proc calc_face_centroid*(face: MyMeshType_FaceRef): type(face.goHalfedge.goToVertex.propPoint) =
+proc calc_face_centroid*(face: MyMeshType.FaceRef): MyMeshType.vertexPropertyType(point) =
   ## calculates the average of the vertices defining the face
   var valence: type(result[0])
   for vertex in face.circulateVertices:
@@ -215,7 +216,7 @@ proc calc_face_centroid*(face: MyMeshType_FaceRef): type(face.goHalfedge.goToVer
   
   result = result / valence
   
-proc calc_halfedge_normal*(inHalfedge: MyMeshType_HalfedgeRef, feature_angle: float64): type(inHalfedge.goToVertex.propPoint) =
+proc calc_halfedge_normal*(inHalfedge: MyMeshType.HalfedgeRef, feature_angle: float64): MyMeshType.vertexPropertyType(point) =
   ## calculates the normal of the To vertex, but takes boundaries into consideration.
   ## this means that faces are not cut away
 
@@ -257,7 +258,7 @@ proc calc_halfedge_normal*(inHalfedge: MyMeshType_HalfedgeRef, feature_angle: fl
     result = result.normalize
     
 
-proc calc_sector_angle*(halfedge: MyMeshType_HalfedgeRef): type(halfedge.goToVertex.propPoint[0]) =
+proc calc_sector_angle*(halfedge: MyMeshType.HalfedgeRef): MyMeshType.vertexPropertyType(point).T =
   ## The vertex pointed by ``halfedge`` defines the sector center
   ## The angle will be calculated between the given halfedge and the next halfedge.
   ## Seen from the center vertex this will be the next halfedge in clockwise direction.
@@ -283,18 +284,18 @@ proc calc_sector_angle*(halfedge: MyMeshType_HalfedgeRef): type(halfedge.goToVer
     return arccos(clamp(cos_a,-1,1));
 
 
-proc calc_sector_area*(halfedge: MyMeshType_HalfedgeRef): type(halfedge.goToVertex.propPoint[0]) =
+proc calc_sector_area*(halfedge: MyMeshType.HalfedgeRef): MyMeshType.vertexPropertyType(point).T =
   ## calculates the area of the face sector defined by
   ## the angle ``(inHalfedge,inHalfedge.goNext)``
   ## NOTE: special cases (e.g. concave sectors) are not handled correctly
   let sector_normal = halfedge.calc_sector_normal_unnormalized
   return sector_normal.norm / 2
   
-proc calc_vertex_normal_fast*(vertex: MyMeshType_VertexRef): type(vertex.propPoint) =
+proc calc_vertex_normal_fast*(vertex: MyMeshType.VertexRef): MyMeshType.vertexPropertyType(point) =
   for face in vertex.circulateFaces:
     result = result + face.getNormal
 
-proc calc_vertex_normal*(vertex: MyMeshType_VertexRef): type(vertex.propPoint) =
+proc calc_vertex_normal*(vertex: MyMeshType.VertexRef): MyMeshType.vertexPropertyType(point) =
   result = vertex.calc_vertex_normal_fast
   let length_sq = dot(result, result) # squared length
   if length_sq != 0:
@@ -302,7 +303,7 @@ proc calc_vertex_normal*(vertex: MyMeshType_VertexRef): type(vertex.propPoint) =
 
 import loopschememask
     
-proc calc_vertex_normal_loop*(vertex: MyMeshType_VertexRef): type(vertex.propPoint) =
+proc calc_vertex_normal_loop*(vertex: MyMeshType.VertexRef): MyMeshType.vertexPropertyType(point) =
 
   #static const LoopSchemeMaskDouble& loop_scheme_mask__ =
   #                LoopSchemeMaskDoubleSingleton::Instance();
@@ -322,7 +323,7 @@ proc calc_vertex_normal_loop*(vertex: MyMeshType_VertexRef): type(vertex.propPoi
   # hack: should be cross(t_v, t_w), but then the normals are reversed?
   result.xyz() = cross(t_w.xyz, t_v.xyz)
 
-proc calc_vertex_normal_correct*(vertex: MyMeshType_VertexRef): type(vertex.propPoint) =
+proc calc_vertex_normal_correct*(vertex: MyMeshType.VertexRef): MyMeshType.vertexPropertyType(point) =
   ## there is no correct way to calculate the vertex normal
   if vertex.goOutHalfedge.handle.is_invalid:
     # dont crash on isolated vertices
@@ -342,4 +343,6 @@ proc calc_vertex_normal_correct*(vertex: MyMeshType_VertexRef): type(vertex.prop
 
     in_he_vec = - out_he_vec; # change the orientation
 
-    
+
+      
+]#

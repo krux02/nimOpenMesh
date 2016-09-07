@@ -1,4 +1,5 @@
 #this is supposed to be a nim port of open mesh.
+import macros
 
 type
   VertexHandle*      = distinct int
@@ -43,9 +44,91 @@ handleProcs(FaceHandle)
 macro debugAst*(ast: typed): untyped =
   echo ast.repr
   result = ast
+  
+macro hasProperty(tpe: typed; propertyType, ident: untyped): bool =
+  block b:
+    for identDefs in tpe.symbol.getImpl[2][2]:
+      if identDefs[0][1].ident == propertyType.ident:
+        for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
+          if innerIdentDefs[0].ident == ident.ident:
+            result = newLit(true)
+            break b
+    result = newLit(false)
 
-include meshwalker, property
+macro propertyType(tpe: typed; propertyType, ident: untyped): untyped =
+  block b:
+    for identDefs in tpe.symbol.getImpl[2][2]:
+      if identDefs[0][1].ident == propertyType.ident:
+        for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
+          if innerIdentDefs[0].ident == ident.ident:
+            return innerIdentDefs[1][1]
 
+template vertexPropertyType*(tpe: typedesc; ident: untyped): typedesc =
+  propertyType(MyMeshType, vertexProperties, point)
+
+template facePropertyType*(tpe: typedesc; ident: untyped): typedesc =
+  propertyType(MyMeshType, faceProperties, point)
+
+template edgePropertyType*(tpe: typedesc; ident: untyped): typedesc =
+  propertyType(MyMeshType, edgeProperties, point)
+
+template halfedgePropertyType*(tpe: typedesc; ident: untyped): typedesc =
+  propertyType(MyMeshType, halfedgeProperties, point)
+  
+template hasVertexProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, vertexProperties, ident)
+
+template hasFaceProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, faceProperties, ident)
+
+template hasHalfedgeProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, halfedgeProperties, ident)
+
+template hasEdgeProperty*(tpe: typedesc, ident: untyped): bool =
+  hasProperty(tpe, edgeProperties, ident)
+
+proc structOfArrays(name: NimNode, members: seq[tuple[name, typ: NimNode]]) : NimNode =
+
+  var mappedMembers = newSeq[tuple[name,typ:NimNode]](len(members))
+
+  for i,tup in members:
+    mappedMembers[i].name = tup.name
+    mappedMembers[i].typ  = nnkBracketExpr.newTree(ident("seq"), tup.typ)
+
+  result = quote do:
+    type `name` = object
+ 
+  let recList = newNimNode(nnkRecList)
+  #result = result[0][0] # peel StmtList and TypeSection
+  #result[2][2] = recList
+  result[0][0][2][2] = recList
+  
+  for tup in mappedMembers:
+    recList.add nnkIdentDefs.newTree(tup.name, tup.typ, newEmptyNode())
+
+proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
+  typeDef.expectKind nnkTypeDef
+
+  typeDef[1].expectKind nnkEmpty
+  typeDef[2].expectKind nnkObjectTy
+  typeDef[2][0].expectKind nnkEmpty
+  typeDef[2][1].expectKind nnkEmpty
+  typeDef[2][2].expectKind nnkRecList
+
+  result.newSeq(0)
+
+  for identDefs in typeDef[2][2]:
+    identDefs.expectKind nnkIdentDefs
+    identDefs[0].expectKind nnkIdent
+    identDefs[1].expectKind nnkIdent
+    identDefs[2].expectKind nnkEmpty
+
+    result.add( (name: identDefs[0], typ: identDefs[1]) )
+
+# parameter to control export
+
+include meshwalker
+    
 macro createMeshType*(name, argStmtList: untyped): auto =
   name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
@@ -97,8 +180,6 @@ macro createMeshType*(name, argStmtList: untyped): auto =
         halfedgeProperties*: `halfedgePropertiesTypeIdent`
         edgeProperties*: `edgePropertiesTypeIdent`
 
-  
-
   # create walker types
   
   var typeNames : array[4, string]  
@@ -135,31 +216,7 @@ macro createMeshType*(name, argStmtList: untyped): auto =
         proc `accessorIdent`*(walker: `refIdent`): var `typ` =    
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
-  result.add newCall(bindSym"walkerMethods", name)
-
+  result.add newCall(bindSym"meshTypeMethods", name)
   #echo result.repr
-  #result = newCall(bindSym"debugAst", result)
-
-
-macro hasProperty(tpe: typed; propertyType, ident: untyped): bool =
-  block b:
-    for identDefs in tpe.symbol.getImpl[2][2]:
-      if identDefs[0][1].ident == propertyType.ident:
-        for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
-          if innerIdentDefs[0].ident == ident.ident:
-            result = newLit(true)
-            break b
-    result = newLit(false)
-      
-template hasVertexProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, vertexProperties, ident)
-
-template hasFaceProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, faceProperties, ident)
-
-template hasHalfedgeProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, halfedgeProperties, ident)
-
-template hasEdgeProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, edgeProperties, ident)
+  result = newCall(bindSym"debugAst", result)
 
