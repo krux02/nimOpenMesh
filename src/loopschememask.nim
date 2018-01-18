@@ -53,8 +53,8 @@ import math
 
 const cache_size = 128
 
-type Scalar = float64
-    
+type Scalar = float32
+
 proc compute_proj_weight(valence: int): Scalar =
   let
     denom =   3 + 2 * cos(Scalar(Tau) / Scalar(valence))
@@ -90,7 +90,7 @@ var
   step_weights:  array[cache_size, Scalar]
   tang0_weights: array[cache_size, seq[Scalar]]
   tang1_weights: array[cache_size, seq[Scalar]]
-  
+
 proj_weights[0] = 1
 for k in 1 .. < cache_size:
   proj_weights[k] = compute_proj_weight(k);
@@ -98,12 +98,12 @@ for k in 1 .. < cache_size:
   step_weights[k] = compute_step_weight(k);
   tang0_weights[k].newSeq(k) # WTF resize in inner loop?
   tang1_weights[k].newSeq(k) # TODO what is real resize function?
-     
+
   for i in 0 .. < k:
     tang0_weights[k][i] = compute_tang0_weight(k,i);
     tang1_weights[k][i] = compute_tang1_weight(k,i);
 
-  
+
 proc proj_weight*(valence: int): Scalar =
   assert(valence < cache_size) # really assert?
   return proj_weights[valence];

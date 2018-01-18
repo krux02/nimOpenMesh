@@ -8,7 +8,7 @@ type
   FaceHandle*        = distinct int
 
   Halfedge* = object
-    face_handle*:          FaceHandle  
+    face_handle*:          FaceHandle
     vertex_handle*:        VertexHandle
     next_halfedge_handle*: HalfedgeHandle
     prev_halfedge_handle*: HalfedgeHandle
@@ -25,7 +25,7 @@ type
     vertices* : seq[Vertex]
     edges*    : seq[Edge]
     faces*    : seq[Face]
-    
+
 template handleProcs(HandleType: typedesc) =
   proc `==`*(handleA, handleB: HandleType): bool =
     handleA == handleB
@@ -35,7 +35,7 @@ template handleProcs(HandleType: typedesc) =
 
   proc is_invalid*(handle: HandleType): bool =
     handle.int < 0
-    
+
 handleProcs(VertexHandle)
 handleProcs(HalfedgeHandle)
 handleProcs(EdgeHandle)
@@ -44,7 +44,7 @@ handleProcs(FaceHandle)
 macro debugAst*(ast: typed): untyped =
   echo ast.repr
   result = ast
-  
+
 macro hasProperty(tpe: typed; propertyType, ident: untyped): bool =
   block b:
     for identDefs in tpe.symbol.getImpl[2][2]:
@@ -62,7 +62,7 @@ macro propertyType(tpe: typed; propertyType, ident: untyped): untyped =
         for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
           if innerIdentDefs[0].ident == ident.ident:
             return innerIdentDefs[1][1]
-            
+
 template vertexPropertyType*(tpe: typedesc; ident: untyped): typedesc =
   propertyType(MyMeshType, vertexProperties, point)
 
@@ -74,7 +74,7 @@ template edgePropertyType*(tpe: typedesc; ident: untyped): typedesc =
 
 template halfedgePropertyType*(tpe: typedesc; ident: untyped): typedesc =
   propertyType(MyMeshType, halfedgeProperties, point)
-  
+
 template hasVertexProperty*(tpe: typedesc, ident: untyped): bool =
   hasProperty(tpe, vertexProperties, ident)
 
@@ -97,12 +97,12 @@ proc structOfArrays(name: NimNode, members: seq[tuple[name, typ: NimNode]]) : Ni
 
   result = quote do:
     type `name` = object
- 
+
   let recList = newNimNode(nnkRecList)
   #result = result[0][0] # peel StmtList and TypeSection
   #result[2][2] = recList
   result[0][0][2][2] = recList
-  
+
   for tup in mappedMembers:
     recList.add nnkIdentDefs.newTree(tup.name, tup.typ, newEmptyNode())
 
@@ -136,9 +136,9 @@ macro createMeshType*(name, argStmtList: untyped): auto =
   let
     propertyCategoryNames    = ["vertex", "face", "edge", "halfedge"]
     propertyCategoryNamesUC  = ["Vertex", "Face", "Edge", "Halfedge"]
-  
+
   var propertiesSequences: array[4, seq[tuple[name, typ: NimNode]]]
-  
+
   for typeDef in argTypeSection:
     let ident = typeDef[0].ident
     case $ident
@@ -158,7 +158,7 @@ macro createMeshType*(name, argStmtList: untyped): auto =
     let node = structOfArrays(ident($name.ident & propertyCategoryNamesUC[i] & "Properties"), propertiesSeq)
     result.add node
     propertiesTypes[i] = node[0][0]
-    
+
 
   let
     vertexPropertiesTypeIdent   = propertiesTypes[0][0]
@@ -178,13 +178,13 @@ macro createMeshType*(name, argStmtList: untyped): auto =
         edgeProperties*: `edgePropertiesTypeIdent`
 
   # create walker types
-  
-  var typeNames : array[4, string]  
+
+  var typeNames : array[4, string]
   for i, categoryName in propertyCategoryNamesUC:
     let identStr = $name.ident & "_" & categoryName & "Ref"
-    
+
     let typeAccessorName = newIdentNode(categoryName & "Ref")
-    
+
     typeNames[i] = identStr
     let
       identNode = ident(identStr)
@@ -197,7 +197,7 @@ macro createMeshType*(name, argStmtList: untyped): auto =
 
       template `typeAccessorName`*(tpe: typedesc[`name`]): typedesc =
         `identNode`
-        
+
 
   # create property accessors from walkers
 
@@ -205,7 +205,7 @@ macro createMeshType*(name, argStmtList: untyped): auto =
     let
       propertiesName = ident(propertyCategoryNames[i] & "Properties")
       refIdent = ident(typeNames[i])
-      
+
     for tup in propertiesSeq:
       let
         typ = tup.typ
@@ -217,16 +217,12 @@ macro createMeshType*(name, argStmtList: untyped): auto =
       let accessorIdent = ident("prop" & nameStr)
 
       result.add quote do:
-        proc `accessorIdent`*(walker: `refIdent`): var `typ` =    
+        proc `accessorIdent`*(walker: `refIdent`): var `typ` =
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
 
   result.add quote do:
     meshTypeMethodsTemplate(`name`)
-    
+
 
   #echo result.repr
-  #result = newCall(bindSym"debugAst", result)
-
-
-
-
+  result = newCall(bindSym"debugAst", result)
