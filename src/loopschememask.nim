@@ -92,14 +92,14 @@ var
   tang1_weights: array[cache_size, seq[Scalar]]
 
 proj_weights[0] = 1
-for k in 1 .. < cache_size:
+for k in 1 ..< cache_size:
   proj_weights[k] = compute_proj_weight(k);
   limit_weights[k] = compute_limit_weight(k);
   step_weights[k] = compute_step_weight(k);
   tang0_weights[k].newSeq(k) # WTF resize in inner loop?
   tang1_weights[k].newSeq(k) # TODO what is real resize function?
 
-  for i in 0 .. < k:
+  for i in 0 ..< k:
     tang0_weights[k][i] = compute_tang0_weight(k,i);
     tang1_weights[k][i] = compute_tang1_weight(k,i);
 

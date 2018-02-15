@@ -8,13 +8,21 @@ proc angle(cos_angle, sin_angle: float32): float32 =
 
 template meshTypeMethodsTemplate*(MeshType: typedesc) =
 
-  proc connectivity(halfedge: MeshType.HalfedgeRef): Halfedge =
+  # TODO maybe not export
+  proc connectivity*(mesh: var MeshType, handle: HalfedgeHandle): var Halfedge =
+    mesh.edges[handle.int div 2][handle.int and 1]
+  proc connectivity*(mesh: var MeshType, handle: VertexHandle): var Vertex =
+    mesh.vertices[handle.int]
+  proc connectivity*(mesh: var MeshType, handle: FaceHandle): var Face =
+    mesh.faces[handle.int]
+
+  proc connectivity*(halfedge: MeshType.HalfedgeRef): var Halfedge =
     halfedge.mesh.edges[halfedge.handle.int div 2][halfedge.handle.int and 1]
 
-  proc connectivity(vertes: MeshType.VertexRef): Vertex =
+  proc connectivity*(vertes: MeshType.VertexRef): var Vertex =
     vertes.mesh.vertices[vertes.handle.int]
 
-  proc connectivity(face: MeshType.FaceRef): Face =
+  proc connectivity*(face: MeshType.FaceRef): var Face =
     face.mesh.faces[face.handle.int]
 
   # is never used
@@ -463,8 +471,8 @@ template meshTypeMethodsTemplate*(MeshType: typedesc) =
 
     var i = 0
     for vertex in vertex.circulateVertices:
-      t_v = t_v + loopschememask.tang0_weight(valence, i) * vertex.propNormal
-      t_w = t_w + loopschememask.tang1_weight(valence, i) * vertex.propPoint
+      t_v = t_v + vertex.propNormal * loopschememask.tang0_weight(valence, i)
+      t_w = t_w + vertex.propPoint * loopschememask.tang1_weight(valence, i)
       i += 1
 
     # hack: should be cross(t_v, t_w), but then the normals are reversed?
