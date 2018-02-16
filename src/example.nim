@@ -1,6 +1,7 @@
 import openmesh, glm
 
 createMeshType(MyMeshType):
+  debug
   type
     VertexData = object
       point     : Vec4f

@@ -1,12 +1,60 @@
-import math
+import math, macros
 
 proc angle(cos_angle, sin_angle: float32): float32 =
-  #sanity checks - otherwise acos will return nan
+  # sanity checks - otherwise acos will return nan
   result = arccos(clamp(cos_angle, -1, 1))
   if sin_angle < 0:
     result *= -1
 
-template meshTypeMethodsTemplate*(MeshType: typedesc) =
+template meshRefTypesTemplate*(MeshType: typedesc): untyped =
+
+  template HalfedgeRef*(_ : typedesc[MeshType]): untyped =
+    GHalfedgeRef[MeshType]
+
+  template EdgeRef*(_ : typedesc[MeshType]): untyped =
+    GEdgeRef[MeshType]
+
+  template FaceRef*(_ : typedesc[MeshType]): untyped =
+    GFaceRef[MeshType]
+
+  template VertexRef*(_ : typedesc[MeshType]): untyped =
+    GVertexRef[MeshType]
+
+
+template meshTypeMethodsTemplate*(MeshType: typedesc): untyped =
+  # Pairs of handle and pointer to the mesh.  Basically they are
+  # pointer types that point into an index of a `seq` and don't break
+  # when the seq resizes.
+
+  iterator vertexRefs*(mesh : var MeshType) : MeshType.VertexRef =
+    var vertexRef : MeshType.VertexRef
+    vertexRef.mesh = mesh.addr
+    for i in 0 .. high(mesh.vertices):
+      vertexRef.handle = VertexHandle(i)
+      yield(vertexRef)
+
+  iterator faceRefs*(mesh : var MeshType) : MeshType.FaceRef =
+    var faceRef : MeshType.FaceRef
+    faceRef.mesh = mesh.addr
+    for i in 0 .. high(mesh.faces):
+      faceRef.handle = FaceHandle(i)
+      yield(faceRef)
+
+  iterator edgeRefs*(mesh : var MeshType) : MeshType.EdgeRef =
+    var edgeRef : MeshType.EdgeRef
+    edgeRef.mesh = mesh.addr
+    for i in 0 .. high(mesh.edges):
+      edgeRef.handle = EdgeHandle(i)
+      yield(edgeRef)
+
+  iterator halfedgeRefs*(mesh : var MeshType) : MeshType.HalfedgeRef =
+    var halfedgeRef : MeshType.HalfedgeRef
+    halfedgeRef.mesh = mesh.addr
+    for i in 0 .. high(mesh.edges):
+      halfedgeRef.handle = HalfedgeHandle(i*2)
+      yield(halfedgeRef)
+      halfedgeRef.handle = HalfedgeHandle(i*2+1)
+      yield(halfedgeRef)
 
   # TODO maybe not export
   proc connectivity*(mesh: var MeshType, handle: HalfedgeHandle): var Halfedge =
@@ -241,8 +289,8 @@ template meshTypeMethodsTemplate*(MeshType: typedesc) =
 
     for halfedge in face.circulateInHalfedges:
       let
-        pointA = halfedge.goFromVertex.propPoint
-        pointB = halfedge.goToVertex.propPoint
+        pointA = halfedge.goFromVertex.propPoint()
+        pointB = halfedge.goToVertex.propPoint()
 
         a = pointA - pointB
         b = pointA + pointB
@@ -284,10 +332,6 @@ template meshTypeMethodsTemplate*(MeshType: typedesc) =
 
   proc is_not_estimated_feature_edge*(halfedge: MeshType.HalfedgeRef, feature_angle: float): bool =
     not is_estimated_feature_edge(halfedge, feature_angle)
-
-  #proc cross(v1,v2: Vec4f): Vec4f =
-  #  vec4f(cross(v1.xyz, v2.xyz), 0)
-
 
   proc calc_edge_vector*(halfedge: MeshType.HalfedgeRef): auto =
     ## Calculates the edge vector as the difference of the
@@ -471,8 +515,8 @@ template meshTypeMethodsTemplate*(MeshType: typedesc) =
 
     var i = 0
     for vertex in vertex.circulateVertices:
-      t_v = t_v + vertex.propNormal * loopschememask.tang0_weight(valence, i)
-      t_w = t_w + vertex.propPoint * loopschememask.tang1_weight(valence, i)
+      t_v = t_v + loopschememask.tang0_weight(valence, i) * vertex.propNormal
+      t_w = t_w + loopschememask.tang1_weight(valence, i) * vertex.propPoint
       i += 1
 
     # hack: should be cross(t_v, t_w), but then the normals are reversed?

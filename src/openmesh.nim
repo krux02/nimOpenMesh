@@ -23,10 +23,31 @@ type
   Face*   = object
     halfedge_handle*: HalfedgeHandle
 
-  BaseMesh* = object
+  GBaseMesh*[VertexProps, FaceProps, EdgeProps, HalfedgeProps] = object
     vertices* : seq[Vertex]
     edges*    : seq[Edge]
     faces*    : seq[Face]
+    vertexProps*: VertexProps
+    faceProps*: FaceProps
+    edgeProps*: EdgeProps
+    halfedgeProps*: HalfedgeProps
+
+  GVertexRef*[MeshType] = object
+    mesh*: ptr MeshType
+    handle*: VertexHandle
+
+  GFaceRef*[MeshType] = object
+    mesh*: ptr MeshType
+    handle*: FaceHandle
+
+  GEdgeRef*[MeshType] = object
+    mesh*: ptr MeshType
+    handle*: EdgeHandle
+
+  GHalfedgeRef*[MeshType] = object
+    mesh*: ptr MeshType
+    handle*: HalfedgeHandle
+
 
 proc `==`*(handleA, handleB: HandleType): bool =
   var a : int = handleA.int
@@ -49,47 +70,58 @@ macro debugAst*(ast: typed): untyped =
   echo ast.repr
   result = ast
 
-macro hasProperty(tpe: typed; propertyType, ident: untyped): bool =
+macro hasProperty(tpe: typedesc; propertyType, ident: untyped): bool =
   block b:
-    for identDefs in tpe.symbol.getImpl[2][2]:
-      if identDefs[0][1].ident == propertyType.ident:
+    # Sym(MyMeshType) -> typedesc[MyMeshType] -> MyMeshType -> objectTy(...)
+    let impl = tpe.getTypeInst[1].getTypeImpl
+    for identDefs in impl[2]:
+      identDefs.expectKind nnkIdentDefs
+      let name = $identDefs[0]
+      if eqIdent(propertyType, name):
         for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
           if innerIdentDefs[0].ident == ident.ident:
             result = newLit(true)
-            break b
-    result = newLit(false)
+            return
 
-macro propertyType(tpe: typed; propertyType, ident: untyped): untyped =
+  result = newLit(false)
+
+macro propertyType(tpe: typedesc; propertyType, ident: untyped): untyped =
   block b:
-    for identDefs in tpe.symbol.getImpl[2][2]:
-      if identDefs[0][1].ident == propertyType.ident:
+    # Sym(MyMeshType) -> typedesc[MyMeshType] -> MyMeshType -> objectTy(...)
+    let impl = tpe.getTypeInst[1].getTypeImpl
+    for identDefs in impl[2]:
+      identDefs.expectKind nnkIdentDefs
+      let name = $identDefs[0]
+      if eqIdent(propertyType, name):
         for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
           if innerIdentDefs[0].ident == ident.ident:
-            return innerIdentDefs[1][1]
+            result = innerIdentDefs[1][1]
+            return
+  error("in propertyType failed", callsite())
 
 template vertexPropertyType*(tpe: typedesc; ident: untyped): typedesc =
-  propertyType(MyMeshType, vertexProperties, point)
+  propertyType(MyMeshType, vertexProps, point)
 
 template facePropertyType*(tpe: typedesc; ident: untyped): typedesc =
-  propertyType(MyMeshType, faceProperties, point)
+  propertyType(MyMeshType, faceProps, point)
 
 template edgePropertyType*(tpe: typedesc; ident: untyped): typedesc =
-  propertyType(MyMeshType, edgeProperties, point)
+  propertyType(MyMeshType, edgeProps, point)
 
 template halfedgePropertyType*(tpe: typedesc; ident: untyped): typedesc =
-  propertyType(MyMeshType, halfedgeProperties, point)
+  propertyType(MyMeshType, halfedgeProps, point)
 
 template hasVertexProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, vertexProperties, ident)
+  hasProperty(tpe, vertexProps, ident)
 
 template hasFaceProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, faceProperties, ident)
+  hasProperty(tpe, faceProps, ident)
 
 template hasHalfedgeProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, halfedgeProperties, ident)
+  hasProperty(tpe, halfedgeProps, ident)
 
 template hasEdgeProperty*(tpe: typedesc, ident: untyped): bool =
-  hasProperty(tpe, edgeProperties, ident)
+  hasProperty(tpe, edgeProps, ident)
 
 proc structOfArraysTypeDef(name: NimNode, members: seq[tuple[name, typ: NimNode]]) : NimNode =
 
@@ -99,30 +131,15 @@ proc structOfArraysTypeDef(name: NimNode, members: seq[tuple[name, typ: NimNode]
     mappedMembers[i].name = tup.name
     mappedMembers[i].typ  = nnkBracketExpr.newTree(ident("seq"), tup.typ)
 
-
-  result = quote do:
-    type `name` = object
-
-  result.expectKind nnkTypeSection # this was a breaking change in Nim
-
   let recList = newNimNode(nnkRecList)
-  #result = result[0][0] # peel StmtList and TypeSection
-  #result[2][2] = recList
-
   for tup in mappedMembers:
     recList.add nnkIdentDefs.newTree(tup.name, tup.typ, newEmptyNode())
 
-  result[0][2][2] = recList
-
-  result = nnkTypeDef.newTree(
-    name,
-    newEmptyNode(),
-    nnkObjectTy.newTree(
-      newEmptyNode(),
-      newEmptyNode(),
-      recList
-    )
-  )
+  result = quote do:
+    type `name` = object
+  result.expectKind nnkTypeSection
+  result = result[0] # strip type section
+  result[2][2] = recList
 
 proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
   typeDef.expectKind nnkTypeDef
@@ -144,15 +161,31 @@ proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
     result.add( (name: identDefs[0], typ: identDefs[1]) )
 
 macro createMeshType*(name, argStmtList: untyped): untyped =
+  var debug = false
 
   name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
-  let argTypeSection = argStmtList[0]
+
+  if argStmtList[0].kind == nnkIdent:
+    if eqIdent(argStmtList[0], "debug"):
+      debug = true
+    else:
+      error("undefined identifier in DSL", argStmtList[0])
+  else:
+    argStmtList[0].expectKind nnkTypeSection
+
+  let argTypeSection = argStmtList[^1]
   argTypeSection.expectKind nnkTypeSection
 
   let
     propertyCategoryNames    = ["vertex", "face", "edge", "halfedge"]
     propertyCategoryNamesUC  = ["Vertex", "Face", "Edge", "Halfedge"]
+    propertyTypeIdents = [
+      ident($name.ident &   "VertexProps"),
+      ident($name.ident &     "FaceProps"),
+      ident($name.ident &     "EdgeProps"),
+      ident($name.ident & "HalfedgeProps")
+    ]
 
   var propertiesSequences: array[4, seq[tuple[name, typ: NimNode]]]
 
@@ -170,127 +203,81 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
     else:
       error("unexpected " & $ident & " expect one of {VertexData, FaceData, EdgeData, HalfedgeData}")
 
-  let typeSection = nnkTypeSection.newTree()
-  var propertyTypeIdents: array[4, NimNode]
-  for i,propertiesSeq in propertiesSequences:
-    let typeDef = structOfArraysTypeDef(
-      ident($name.ident & propertyCategoryNamesUC[i] & "Properties"),
+
+  let typeExpr = nnkBracketExpr.newTree(
+    bindSym"GBaseMesh",
+    propertyTypeIdents[0],
+    propertyTypeIdents[1],
+    propertyTypeIdents[2],
+    propertyTypeIdents[3]
+  )
+
+  let typeSection = quote do:
+    type
+      `name`* = `typeExpr`
+
+  for i, propertiesSeq in propertiesSequences:
+    typeSection.add structOfArraysTypeDef(
+      propertyTypeIdents[i],
       propertiesSeq
     )
-    typeSection.add typeDef
-    propertyTypeIdents[i] = typeDef[0]
-
-  let
-    vertexPropertiesTypeIdent   = propertyTypeIdents[0]
-    facePropertiesTypeIdent     = propertyTypeIdents[1]
-    edgePropertiesTypeIdent     = propertyTypeIdents[2]
-    halfedgePropertiesTypeIdent = propertyTypeIdents[3]
 
   result = newStmtList()
-
   result.add typeSection
 
-  result.add quote do:
-    type
-      `name`* = object
-        vertices* : seq[Vertex]
-        edges*    : seq[Edge]
-        faces*    : seq[Face]
-        vertexProperties*: `vertexPropertiesTypeIdent`
-        faceProperties*: `facePropertiesTypeIdent`
-        halfedgeProperties*: `halfedgePropertiesTypeIdent`
-        edgeProperties*: `edgePropertiesTypeIdent`
+  result.add newCall(bindSym"meshRefTypesTemplate", name)
 
   # create walker types
 
-  var typeNames : array[4, string]
-  for i, categoryName in propertyCategoryNamesUC:
-    let identStr = $name.ident & "_" & categoryName & "Ref"
-    let typeAccessorName = newIdentNode(categoryName & "Ref")
-
-    typeNames[i] = identStr
-    let
-      identNode = ident(identStr)
-      HandleType = ident(categoryName & "Handle")
-    result.add quote do:
-      type
-        `identNode`* = object
-          mesh*: ptr `name`
-          handle*: `HandleType`
-
-      template `typeAccessorName`*(tpe: typedesc[`name`]): typedesc =
-        `identNode`
-
-  result.add quote do:
-    iterator vertexRefs*(mesh : var `name`) : `name`.VertexRef =
-      var vertexRef : `name`.VertexRef
-      vertexRef.mesh = mesh.addr
-      for i in 0 .. high(mesh.vertices):
-        vertexRef.handle = VertexHandle(i)
-        yield(vertexRef)
-
-    iterator faceRefs*(mesh : var `name`) : `name`.FaceRef =
-      var faceRef : `name`.FaceRef
-      faceRef.mesh = mesh.addr
-      for i in 0 .. high(mesh.faces):
-        faceRef.handle = FaceHandle(i)
-        yield(faceRef)
-
-    iterator edgeRefs*(mesh : var `name`) : `name`.EdgeRef =
-      var edgeRef : `name`.EdgeRef
-      edgeRef.mesh = mesh.addr
-      for i in 0 .. high(mesh.edges):
-        edgeRef.handle = EdgeHandle(i)
-        yield(edgeRef)
-
-    iterator halfedgeRefs*(mesh : var `name`) : `name`.HalfedgeRef =
-      var halfedgeRef : `name`.HalfedgeRef
-      halfedgeRef.mesh = mesh.addr
-      for i in 0 .. high(mesh.edges):
-        halfedgeRef.handle = HalfedgeHandle(i*2)
-        yield(halfedgeRef)
-        halfedgeRef.handle = HalfedgeHandle(i*2+1)
-        yield(halfedgeRef)
-
-
   let argSym = genSym(nskParam, "mesh")
-  var initProc = quote do:
+  let initProc = quote do:
     proc init*(`argSym`: var `name`): void =
       ## initializes all ``seq`` member types to empty sequences.
       `argSym`.edges.newSeq(0)
       `argSym`.faces.newSeq(0)
       `argSym`.vertices.newSeq(0)
 
+  for i, propertiesSeq in propertiesSequences:
+    let propertiesName = ident(propertyCategoryNames[i] & "Props")
+    for tup in propertiesSeq:
+      let name = tup.name
+      let call = quote do:
+        `argSym`.`propertiesName`.`name`.newSeq(0)
+      initProc.body.add call
+
+  result.add initProc
+
+
   # create property accessors from walkers
+  let walkerProcs = newStmtList()
   for i, propertiesSeq in propertiesSequences:
     let
-      propertiesName = ident(propertyCategoryNames[i] & "Properties")
-      refIdent = ident(typeNames[i])
+      propertiesName = ident(propertyCategoryNames[i] & "Props")
+      refIdent = nnkBracketExpr.newTree(ident("G" & propertyCategoryNamesUC[i] & "Ref"), name)
 
     for tup in propertiesSeq:
       let
         typ = tup.typ
         name = tup.name
+
       var nameStr = $name.ident
       # first letter to upper case without dependency
       if 'a' <= nameStr[0] and nameStr[0] <= 'z':
         nameStr[0] = char(nameStr[0].int - 32)
       let accessorIdent = ident("prop" & nameStr)
 
-      result.add quote do:
+      walkerProcs.add quote do:
         proc `accessorIdent`*(walker: `refIdent`): var `typ` =
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
-
-      let call = quote do:
-        `argSym`.`propertiesName`.`name`.newSeq(0)
-
-      initProc.body.add call
-
-  echo initProc.repr
-  result.add initProc
+  result.add walkerProcs
 
   result.add quote do:
     meshTypeMethodsTemplate(`name`)
 
-  #echo result.repr
-  result = newCall(bindSym"debugAst", result)
+
+  if debug:
+    echo "################################################################################"
+    echo "untyped: "
+    echo result.repr
+    echo "################################################################################"
+    result = newCall(bindSym"debugAst", result)
