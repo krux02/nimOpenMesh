@@ -76,6 +76,7 @@ type
   Material = object
     name: string
 
+
   MtlData = object
     materials: seq[Material]
 
@@ -90,7 +91,7 @@ proc init(arg: var ObjData): void =
   arg.faceLengths.newSeq(0)
   arg.triangleFaces.newSeq(0)
 
-proc init(arg: var Material): void =
+proc init(arg: var MtlData): void =
   arg.materials.newSeq(0)
 
 import strutils, parseutils
@@ -174,14 +175,18 @@ template parserbase(filename: string): untyped =
       result = default
 
   proc consumeSlash(): bool =
-    ## Ty to read a slash. When found it is consumeed and true is
-    ## returned.
+    ## Ty to read a slash. When found it is consumeed and `true` is
+    ## returned. Otherwise `false` is returned.
     if data[dataIndex] == '/':
       dataIndex   += 1
       columnIndex += 1
       return true
     else:
       return false
+
+  proc consumeToken(expected: string): bool =
+    ## Try to read a given token. When found it is consumed and `true`
+    ## is returned. Otherwise `false` is returned.
 
   proc readToken(token: var string): void =
     ## result is stored in token variable to avoid string allocation
@@ -424,7 +429,7 @@ proc parseObj(filename: string): ObjData =
   #for fv in result.faceVertices:
   #  echo fv
 
-proc parseMtl(arg: filename): MtlData =
+proc parseMtl(filename: string): MtlData =
   result.init
   parserBase(filename)
 
@@ -437,10 +442,53 @@ proc parseMtl(arg: filename): MtlData =
       discard
     # Vertex data
     of "newmtl": # material definition
-      result.materials.setLen(materials.len + 1)
+      result.materials.setLen(result.materials.len + 1)
       readToken(token)
-      materials[^1].name = token
+      result.materials[^1].name = token
 
+    of "Ka", "Kd", "Ks", "Tf":
+      if consumeToken("spectral"):
+        var spectralFilename: newStringOfCap[32]
+        readToken(spectralFilename)
+        let factor = readFloat(1.0)
+        warning("unhandled token '", token, " spectral'")
+      elif consumeToken("xyz"):
+
+        var mat: Mat3d
+        mat[0] = vec3( 3.2407,  -0.9689,  0.0557)
+        mat[0] = vec3(-1.5372,  1.8758,  -0.2040)
+        mat[1] = vec3(-0.4986,  0.0415,  1.0570)
+
+        var color_CIEXYZ: Vec3d
+        color_CIEXYZ.x = parseFloat()
+        color_CIEXYZ.y = parseFloat(color_CIEXYZ.x)
+        color_CIEXYZ.z = parseFloat(color_CIEXYZ.x)
+
+        let color_CIEXYZ = vec3(x,y,z)
+        let color_sRGB = mat * color_CIEXYZ
+
+        warning("unhandled token '", token, " xyz'")
+      else:
+        var color: Vec3
+        color.r = parseFloat()
+        color.g = parseFloat()
+        color.b = parseFloat()
+        warning("unhandled token '", token, " r g b")
+
+      of "Ns":
+        ## specular exponent
+        let exponent = parseFloat()
+        warning("unhandled token 'Ns'")
+
+      of "sharpness":
+        ## Specifies the sharpness of the reflections from the local
+        ## reflection map.
+        let value = parseFloat()
+        warning("unhandled token 'sharpness'")
+
+      of "Ni":
+        let density = parseFloat()
+        warning("unhandled token 'density'")
 
 
 
