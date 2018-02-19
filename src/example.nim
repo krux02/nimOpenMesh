@@ -19,7 +19,6 @@ type
     stepSize: float                  # step
 
     # Elements
-
     points:  seq[int32] # p
 
     # l
@@ -74,18 +73,11 @@ type
     curveApproximationTechnique: string   # ctech
     surfaceApproximationTechnique: string # stech
 
+  Material = object
+    name: string
 
-
-# call  filename.ext arg1 arg2 . . .
-# csh   (-)command   ## Executes the requested UNIX command.
-
-  ## parsing tokens
-
-
-
-  # u v w
-  # vp x y z w
-  # strncmp
+  MtlData = object
+    materials: seq[Material]
 
 proc init(arg: var ObjData): void =
   arg.geometricVertices.newSeq(0)
@@ -98,17 +90,15 @@ proc init(arg: var ObjData): void =
   arg.faceLengths.newSeq(0)
   arg.triangleFaces.newSeq(0)
 
+proc init(arg: var Material): void =
+  arg.materials.newSeq(0)
 
 import strutils, parseutils
 
-
-proc parseObj(filename: string): ObjData =
-  result.init
-
+template parserbase(filename: string): untyped =
   let data = readFile(filename)
   var dataIndex = 0
 
-  var token = newStringOfCap(64)
   var lineIndex   = 1
   var columnIndex = 0
 
@@ -130,7 +120,7 @@ proc parseObj(filename: string): ObjData =
     columnIndex = 0
     lineIndex += 1
 
-  proc skipWhitespace(): void =
+  proc mySkipWhitespace(): void {.inject.} =
     ## skips the whitespace within the Line
     while dataIndex < data.len and data[dataIndex] in {' ', '\t'}:
       dataIndex += 1
@@ -144,14 +134,14 @@ proc parseObj(filename: string): ObjData =
       # only one of them can have a value not equal to 0
       dataIndex += i
       dataIndex += j
-      skipWhitespace()
+      mySkipWhitespace()
 
   proc atLineEnd(): bool =
-    skipWhitespace()
+    mySkipWhitespace()
     data[dataIndex] in {'\r', '\l'}
 
   proc readFloat(): float =
-    skipWhitespace()
+    mySkipWhitespace()
     let floatChars = data.parseFloat(result, dataIndex)
     dataIndex   += floatChars
     columnIndex += floatChars
@@ -159,7 +149,7 @@ proc parseObj(filename: string): ObjData =
       error("expected float")
 
   proc readFloat(default: float): float =
-    skipWhitespace()
+    mySkipWhitespace()
     let floatChars = data.parseFloat(result, dataIndex)
     dataIndex   += floatChars
     columnIndex += floatChars
@@ -167,7 +157,7 @@ proc parseObj(filename: string): ObjData =
       result = default
 
   proc readInt(): int =
-    skipWhitespace()
+    mySkipWhitespace()
     let intChars = data.parseInt(result, dataIndex)
     dataIndex   += intChars
     columnIndex += intChars
@@ -176,7 +166,7 @@ proc parseObj(filename: string): ObjData =
 
   proc readInt(default: int): int =
     # Consumen an integer from the input stream. If no int can be found, use `default`
-    skipWhitespace()
+    mySkipWhitespace()
     let intChars = data.parseInt(result, dataIndex)
     dataIndex   += intChars
     columnIndex += intChars
@@ -195,12 +185,20 @@ proc parseObj(filename: string): ObjData =
 
   proc readToken(token: var string): void =
     ## result is stored in token variable to avoid string allocation
-    skipWhitespace()
+    mySkipWhitespace()
     let offset = data.parseUntil(token, Whitespace, dataIndex)
     dataIndex   += offset
     columnIndex += offset
 
-  while dataIndex < data.len:
+  proc atEndOfInput(): bool =
+    dataIndex < data.len
+
+proc parseObj(filename: string): ObjData =
+  result.init
+  parserBase(filename)
+
+  var token: string = newStringOfCap(64)
+  while atEndOfInput():
     readToken(token)
     case token
     of "#": # comment
@@ -425,5 +423,25 @@ proc parseObj(filename: string): ObjData =
   #
   #for fv in result.faceVertices:
   #  echo fv
+
+proc parseMtl(arg: filename): MtlData =
+  result.init
+  parserBase(filename)
+
+  var token: string = newStringOfCap(64)
+  while atEndOfInput():
+    readToken(token)
+    case token
+    of "#": # comment
+      # don't do anything with a comment
+      discard
+    # Vertex data
+    of "newmtl": # material definition
+      result.materials.setLen(materials.len + 1)
+      readToken(token)
+      materials[^1].name = token
+
+
+
 
 discard parseObj("bunny.obj")
