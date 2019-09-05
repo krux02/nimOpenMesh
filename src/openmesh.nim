@@ -160,6 +160,13 @@ proc mapTypeToSeqOfMembers(typeDef: NimNode): seq[tuple[name, typ: NimNode]] =
 
     result.add( (name: identDefs[0], typ: identDefs[1]) )
 
+proc skipExportMarker(arg: NimNode): NimNode =
+  if arg.kind == nnkPostfix:
+    assert arg[0].eqIdent("*")
+    return arg[1]
+  else:
+    return arg
+
 macro createMeshType*(name, argStmtList: untyped): untyped =
   var debug = false
 
@@ -190,7 +197,7 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
   var propertiesSequences: array[4, seq[tuple[name, typ: NimNode]]]
 
   for typeDef in argTypeSection:
-    let ident = typeDef[0].ident
+    let ident = skipExportMarker(typeDef[0])
     case $ident
     of "VertexData":
       propertiesSequences[0] = mapTypeToSeqOfMembers(typeDef)
