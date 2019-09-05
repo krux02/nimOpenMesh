@@ -177,6 +177,7 @@ template parserbase(filename: string): untyped =
   proc consumeSlash(): bool =
     ## Ty to read a slash. When found it is consumeed and `true` is
     ## returned. Otherwise `false` is returned.
+
     if data[dataIndex] == '/':
       dataIndex   += 1
       columnIndex += 1
@@ -187,6 +188,14 @@ template parserbase(filename: string): untyped =
   proc consumeToken(expected: string): bool =
     ## Try to read a given token. When found it is consumed and `true`
     ## is returned. Otherwise `false` is returned.
+    while dataIndex < data.len and data[dataIndex] in " \t":
+      dataIndex += 1
+    if data.len < dataIndex + expected.len:
+      return false
+    for i in 0 ..< expected.len:
+      if expected[i] != data[dataIndex + i]:
+        return false
+    return true
 
   proc readToken(token: var string): void =
     ## result is stored in token variable to avoid string allocation
@@ -448,10 +457,10 @@ proc parseMtl(filename: string): MtlData =
 
     of "Ka", "Kd", "Ks", "Tf":
       if consumeToken("spectral"):
-        var spectralFilename: newStringOfCap[32]
+        var spectralFilename = newStringOfCap(32)
         readToken(spectralFilename)
         let factor = readFloat(1.0)
-        warning("unhandled token '", token, " spectral'")
+        warning("unhandled token '" &  token & " spectral'")
       elif consumeToken("xyz"):
 
         var mat: Mat3d
@@ -460,35 +469,34 @@ proc parseMtl(filename: string): MtlData =
         mat[1] = vec3(-0.4986,  0.0415,  1.0570)
 
         var color_CIEXYZ: Vec3d
-        color_CIEXYZ.x = parseFloat()
-        color_CIEXYZ.y = parseFloat(color_CIEXYZ.x)
-        color_CIEXYZ.z = parseFloat(color_CIEXYZ.x)
+        color_CIEXYZ.x = readFloat()
+        color_CIEXYZ.y = readFloat()
+        color_CIEXYZ.z = readFloat()
 
-        let color_CIEXYZ = vec3(x,y,z)
         let color_sRGB = mat * color_CIEXYZ
 
-        warning("unhandled token '", token, " xyz'")
+        warning("unhandled token '" & token & " xyz'")
       else:
-        var color: Vec3
-        color.r = parseFloat()
-        color.g = parseFloat()
-        color.b = parseFloat()
-        warning("unhandled token '", token, " r g b")
+        var color: Vec3f
+        color.r = readFloat()
+        color.g = readFloat()
+        color.b = readFloat()
+        warning("unhandled token '" & token & " r g b")
 
-      of "Ns":
-        ## specular exponent
-        let exponent = parseFloat()
-        warning("unhandled token 'Ns'")
+    of "Ns":
+      ## specular exponent
+      let exponent = readFloat()
+      warning("unhandled token 'Ns'")
 
-      of "sharpness":
-        ## Specifies the sharpness of the reflections from the local
-        ## reflection map.
-        let value = parseFloat()
-        warning("unhandled token 'sharpness'")
+    of "sharpness":
+      ## Specifies the sharpness of the reflections from the local
+      ## reflection map.
+      let value = readFloat()
+      warning("unhandled token 'sharpness'")
 
-      of "Ni":
-        let density = parseFloat()
-        warning("unhandled token 'density'")
+    of "Ni":
+      let density = readFloat()
+      warning("unhandled token 'density'")
 
 
 

@@ -7,3 +7,6 @@ description = "port of the OpenMesh data structure"
 license     = "MIT"
 srcDir      = "src"
 
+requires @[
+  "glm                  >= 1.1.1   ",
+]
