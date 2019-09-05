@@ -499,5 +499,12 @@ proc parseMtl(filename: string): MtlData =
       warning("unhandled token 'density'")
 
 
+import ExampleMesh
 
-discard parseObj("bunny.obj")
+
+proc main() =
+  let bunny = parseObj("bunny.obj")
+
+  var myMesh: MyMeshType
+  myMesh.init
+  # let myMeshType = parseObj("bunny.obj")

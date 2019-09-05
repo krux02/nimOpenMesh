@@ -48,7 +48,6 @@ type
     mesh*: ptr MeshType
     handle*: HalfedgeHandle
 
-
 proc `==`*(handleA, handleB: HandleType): bool =
   var a : int = handleA.int
   var b : int = handleB.int
@@ -235,26 +234,6 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
   result.add newCall(bindSym"meshRefTypesTemplate", name)
 
   # create walker types
-
-  let argSym = genSym(nskParam, "mesh")
-  let initProc = quote do:
-    proc init*(`argSym`: var `name`): void =
-      ## initializes all ``seq`` member types to empty sequences.
-      `argSym`.edges.newSeq(0)
-      `argSym`.faces.newSeq(0)
-      `argSym`.vertices.newSeq(0)
-
-  for i, propertiesSeq in propertiesSequences:
-    let propertiesName = ident(propertyCategoryNames[i] & "Props")
-    for tup in propertiesSeq:
-      let name = tup.name
-      let call = quote do:
-        `argSym`.`propertiesName`.`name`.newSeq(0)
-      initProc.body.add call
-
-  result.add initProc
-
-
   # create property accessors from walkers
   let walkerProcs = newStmtList()
   for i, propertiesSeq in propertiesSequences:
@@ -281,6 +260,64 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
   result.add quote do:
     meshTypeMethodsTemplate(`name`)
 
+  # generator functions
+
+  block addVertex:
+    echo "addVertex"
+    let argSym = genSym(nskParam, "mesh")
+    let body = newStmtList()
+    body.add quote do:
+      `argSym`.vertices.add Vertex(out_halfedge_handle: HalfedgeHandle(-1))
+      result.mesh = `argSym`.addr
+      result.handle = VertexHandle(`argSym`.vertices.high)
+
+    for (name,typ) in propertiesSequences[0].items:
+      body.add quote do:
+        `argSym`.vertexProps.`name`.add default(`typ`)
+
+    result.add quote do:
+      proc addVertex*(`argSym`: var `name`): `name`.VertexRef =
+        `body`
+
+  block addFace:
+    echo "addFace"
+    let argSym = genSym(nskParam, "mesh")
+    let body = newStmtList()
+    body.add quote do:
+      `argSym`.faces.add Face(halfedge_handle: HalfedgeHandle(-1))
+      result.mesh = `argSym`.addr
+      result.handle = FaceHandle(`argSym`.faces.high)
+
+    for (name,typ) in propertiesSequences[1].items:
+      body.add quote do:
+        `argSym`.faceProps.`name`.add default(`typ`)
+    result.add quote do:
+      proc addFace*(`argSym`: var `name`): `name`.FaceRef =
+        `body`
+
+  block addEdge:
+    echo "addEdge"
+    let argSym = genSym(nskParam, "mesh")
+    let body = newStmtList()
+    body.add quote do:
+      let halfedge = Halfedge(
+          face_handle:          FaceHandle(-1),
+          vertex_handle:        VertexHandle(-1),
+          next_halfedge_handle: HalfedgeHandle(-1),
+          prev_halfedge_handle: HalfedgeHandle(-1))
+      `argSym`.edges.add [halfedge,halfedge]
+      result.mesh = `argSym`.addr
+      result.handle = EdgeHandle(`argSym`.edges.high)
+    for (name,typ) in propertiesSequences[2].items:
+      body.add quote do:
+        `argSym`.edgeProps.`name`.add default(`typ`)
+    for (name,typ) in propertiesSequences[3].items:
+      body.add quote do:
+        `argSym`.halfedgeProps.`name`.add default(`typ`)
+        `argSym`.halfedgeProps.`name`.add default(`typ`)
+    result.add quote do:
+      proc addEdge*(`argSym`: var `name`): `name`.EdgeRef =
+        `body`
 
   if debug:
     echo "################################################################################"
