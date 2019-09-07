@@ -80,20 +80,6 @@ type
   MtlData = object
     materials: seq[Material]
 
-proc init(arg: var ObjData): void =
-  arg.geometricVertices.newSeq(0)
-  arg.textureVertices.newSeq(0)
-  arg.vertexNormals.newSeq(0)
-  arg.parameterSpaceVertices.newSeq(0)
-
-  arg.points.newSeq(0)
-  arg.faceVertices.newSeq(0)
-  arg.faceLengths.newSeq(0)
-  arg.triangleFaces.newSeq(0)
-
-proc init(arg: var MtlData): void =
-  arg.materials.newSeq(0)
-
 import strutils, parseutils
 
 template parserbase(filename: string): untyped =
@@ -208,7 +194,6 @@ template parserbase(filename: string): untyped =
     dataIndex < data.len
 
 proc parseObj(filename: string): ObjData =
-  result.init
   parserBase(filename)
 
   var token: string = newStringOfCap(64)
@@ -432,14 +417,13 @@ proc parseObj(filename: string): ObjData =
 
     skipToNextLine()
 
-  echo "num triangles: ", result.triangleFaces.len
-
-  #
-  #for fv in result.faceVertices:
-  #  echo fv
+  echo "num triangles:              ", result.triangleFaces.len
+  echo "nim geometricVertices:      ", result.geometricVertices.len
+  echo "num textureVertices:        ", result.textureVertices.len
+  echo "num vertexNormals:          ", result.vertexNormals.len
+  echo "num parameterSpaceVertices: ", result.parameterSpaceVertices.len
 
 proc parseMtl(filename: string): MtlData =
-  result.init
   parserBase(filename)
 
   var token: string = newStringOfCap(64)
@@ -498,13 +482,10 @@ proc parseMtl(filename: string): MtlData =
       let density = readFloat()
       warning("unhandled token 'density'")
 
-
 import ExampleMesh
-
 
 proc main() =
   let bunny = parseObj("bunny.obj")
-
   var myMesh: MyMeshType
-  myMesh.init
-  # let myMeshType = parseObj("bunny.obj")
+
+main()

@@ -77,8 +77,8 @@ macro hasProperty(tpe: typedesc; propertyType, ident: untyped): bool =
       identDefs.expectKind nnkIdentDefs
       let name = $identDefs[0]
       if eqIdent(propertyType, name):
-        for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
-          if innerIdentDefs[0].ident == ident.ident:
+        for innerIdentDefs in identDefs[1].getImpl[2][2]:
+          if eqIdent(innerIdentDefs[0],ident):
             result = newLit(true)
             return
 
@@ -92,11 +92,11 @@ macro propertyType(tpe: typedesc; propertyType, ident: untyped): untyped =
       identDefs.expectKind nnkIdentDefs
       let name = $identDefs[0]
       if eqIdent(propertyType, name):
-        for innerIdentDefs in identDefs[1].symbol.getImpl[2][2]:
-          if innerIdentDefs[0].ident == ident.ident:
+        for innerIdentDefs in identDefs[1].getImpl[2][2]:
+          if eqIdent(innerIdentDefs[0],ident):
             result = innerIdentDefs[1][1]
             return
-  error("in propertyType failed", callsite())
+  error("in propertyType failed", tpe)
 
 template vertexPropertyType*(tpe: typedesc; ident: untyped): typedesc =
   propertyType(MyMeshType, vertexProps, point)
@@ -187,10 +187,10 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
     propertyCategoryNames    = ["vertex", "face", "edge", "halfedge"]
     propertyCategoryNamesUC  = ["Vertex", "Face", "Edge", "Halfedge"]
     propertyTypeIdents = [
-      ident($name.ident &   "VertexProps"),
-      ident($name.ident &     "FaceProps"),
-      ident($name.ident &     "EdgeProps"),
-      ident($name.ident & "HalfedgeProps")
+      ident(name.strVal &   "VertexProps"),
+      ident(name.strVal &     "FaceProps"),
+      ident(name.strVal &     "EdgeProps"),
+      ident(name.strVal & "HalfedgeProps")
     ]
 
   var propertiesSequences: array[4, seq[tuple[name, typ: NimNode]]]
@@ -246,7 +246,7 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
         typ = tup.typ
         name = tup.name
 
-      var nameStr = $name.ident
+      var nameStr = name.strVal
       # first letter to upper case without dependency
       if 'a' <= nameStr[0] and nameStr[0] <= 'z':
         nameStr[0] = char(nameStr[0].int - 32)
@@ -263,7 +263,6 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
   # generator functions
 
   block addVertex:
-    echo "addVertex"
     let argSym = genSym(nskParam, "mesh")
     let body = newStmtList()
     body.add quote do:
@@ -280,7 +279,6 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
         `body`
 
   block addFace:
-    echo "addFace"
     let argSym = genSym(nskParam, "mesh")
     let body = newStmtList()
     body.add quote do:
@@ -296,7 +294,6 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
         `body`
 
   block addEdge:
-    echo "addEdge"
     let argSym = genSym(nskParam, "mesh")
     let body = newStmtList()
     body.add quote do:
