@@ -23,6 +23,10 @@ type
   Face*   = object
     halfedge_handle*: HalfedgeHandle
 
+  AddFaceEdgeInfo = object
+     halfedge_handle: HalfedgeHandle
+     is_new, needs_adjust: bool
+
   GBaseMesh*[VertexProps, FaceProps, EdgeProps, HalfedgeProps] = object
     vertices* : seq[Vertex]
     edges*    : seq[Edge]
@@ -31,6 +35,10 @@ type
     faceProps*: FaceProps
     edgeProps*: EdgeProps
     halfedgeProps*: HalfedgeProps
+
+    ## Working storage for `add_face`.
+    edgeData: seq[AddFaceEdgeInfo]
+    next_cache: seq[(HalfedgeHandle,HalfedgeHandle)]
 
   GVertexRef*[MeshType] = object
     mesh*: ptr MeshType
@@ -47,6 +55,12 @@ type
   GHalfedgeRef*[MeshType] = object
     mesh*: ptr MeshType
     handle*: HalfedgeHandle
+
+const
+  InvalidVertexHandle* = VertexHandle(-1)
+  InvalidHalfedgeHandle* = HalfedgeHandle(-1)
+  InvalidEdgeHandle* = EdgeHandle(-1)
+  InvalidFaceHandle* = FaceHandle(-1)
 
 proc `==`*(handleA, handleB: HandleType): bool =
   var a : int = handleA.int
@@ -72,7 +86,10 @@ macro debugAst*(ast: typed): untyped =
 macro hasProperty(tpe: typedesc; propertyType, ident: untyped): bool =
   block b:
     # Sym(MyMeshType) -> typedesc[MyMeshType] -> MyMeshType -> objectTy(...)
-    let impl = tpe.getTypeInst[1].getTypeImpl
+    var typeSym = tpe.getTypeInst
+    while typeSym.kind == nnkBracketExpr and typeSym[0].eqIdent "typeDesc":
+      typeSym = typeSym[1]
+    let impl = typeSym.getTypeImpl
     for identDefs in impl[2]:
       identDefs.expectKind nnkIdentDefs
       let name = $identDefs[0]
@@ -87,7 +104,10 @@ macro hasProperty(tpe: typedesc; propertyType, ident: untyped): bool =
 macro propertyType(tpe: typedesc; propertyType, ident: untyped): untyped =
   block b:
     # Sym(MyMeshType) -> typedesc[MyMeshType] -> MyMeshType -> objectTy(...)
-    let impl = tpe.getTypeInst[1].getTypeImpl
+    var typeSym = tpe.getTypeInst
+    while typeSym.kind == nnkBracketExpr and typeSym[0].eqIdent "typeDesc":
+      typeSym = typeSym[1]
+    let impl = typeSym.getTypeImpl
     for identDefs in impl[2]:
       identDefs.expectKind nnkIdentDefs
       let name = $identDefs[0]
@@ -168,8 +188,6 @@ proc skipExportMarker(arg: NimNode): NimNode =
 
 macro createMeshType*(name, argStmtList: untyped): untyped =
   var debug = false
-
-  name.expectKind nnkIdent
   argStmtList.expectKind nnkStmtList
 
   if argStmtList[0].kind == nnkIdent:
@@ -257,16 +275,19 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
           walker.mesh.`propertiesName`.`name`[walker.handle.int]
   result.add walkerProcs
 
+  let prototypes = newStmtList()
+  result.add prototypes
+
   result.add quote do:
     meshTypeMethodsTemplate(`name`)
 
   # generator functions
 
   block addVertex:
-    let argSym = genSym(nskParam, "mesh")
+    let argSym = ident"mesh"
     let body = newStmtList()
     body.add quote do:
-      `argSym`.vertices.add Vertex(out_halfedge_handle: HalfedgeHandle(-1))
+      `argSym`.vertices.add Vertex(out_halfedge_handle: InvalidHalfedgeHandle)
       result.mesh = `argSym`.addr
       result.handle = VertexHandle(`argSym`.vertices.high)
 
@@ -274,51 +295,64 @@ macro createMeshType*(name, argStmtList: untyped): untyped =
       body.add quote do:
         `argSym`.vertexProps.`name`.add default(`typ`)
 
-    result.add quote do:
-      proc addVertex*(`argSym`: var `name`): `name`.VertexRef =
-        `body`
+    let prototype = quote do:
+      proc addVertex*(`argSym`: var `name`): `name`.VertexRef
+
+    let definition = prototype.copyNimTree
+    definition[^1] = body
+    prototypes.add prototype
+    result.add definition
 
   block addFace:
-    let argSym = genSym(nskParam, "mesh")
+    let argSym = ident"mesh"
     let body = newStmtList()
     body.add quote do:
-      `argSym`.faces.add Face(halfedge_handle: HalfedgeHandle(-1))
+      `argSym`.faces.add Face(halfedge_handle: InvalidHalfedgeHandle)
       result.mesh = `argSym`.addr
       result.handle = FaceHandle(`argSym`.faces.high)
 
     for (name,typ) in propertiesSequences[1].items:
       body.add quote do:
         `argSym`.faceProps.`name`.add default(`typ`)
-    result.add quote do:
-      proc addFace*(`argSym`: var `name`): `name`.FaceRef =
-        `body`
+
+    let prototype = quote do:
+      proc addFace*(`argSym`: var `name`): `name`.FaceRef
+
+    let definition = prototype.copyNimTree
+    definition[^1] = body
+    prototypes.add prototype
+    result.add definition
 
   block addEdge:
-    let argSym = genSym(nskParam, "mesh")
     let body = newStmtList()
+    let meshArg = ident"mesh"
+
     body.add quote do:
       let halfedge = Halfedge(
-          face_handle:          FaceHandle(-1),
-          vertex_handle:        VertexHandle(-1),
-          next_halfedge_handle: HalfedgeHandle(-1),
-          prev_halfedge_handle: HalfedgeHandle(-1))
-      `argSym`.edges.add [halfedge,halfedge]
-      result.mesh = `argSym`.addr
-      result.handle = EdgeHandle(`argSym`.edges.high)
+          face_handle:          InvalidFaceHandle,
+          vertex_handle:        InvalidVertexHandle,
+          next_halfedge_handle: InvalidHalfedgeHandle,
+          prev_halfedge_handle: InvalidHalfedgeHandle)
+      `meshArg`.edges.add [halfedge, halfedge]
+      result.mesh = `meshArg`.addr
+      result.handle = EdgeHandle(`meshArg`.edges.high)
     for (name,typ) in propertiesSequences[2].items:
       body.add quote do:
-        `argSym`.edgeProps.`name`.add default(`typ`)
+        `meshArg`.edgeProps.`name`.add default(`typ`)
     for (name,typ) in propertiesSequences[3].items:
       body.add quote do:
-        `argSym`.halfedgeProps.`name`.add default(`typ`)
-        `argSym`.halfedgeProps.`name`.add default(`typ`)
-    result.add quote do:
-      proc addEdge*(`argSym`: var `name`): `name`.EdgeRef =
-        `body`
+        `meshArg`.halfedgeProps.`name`.add default(`typ`)
+        `meshArg`.halfedgeProps.`name`.add default(`typ`)
+    let prototype = quote do:
+      proc addEdge*(`meshArg`: var `name`): `name`.EdgeRef
+    let definition = prototype.copyNimTree
+    definition[^1] = body
+    prototypes.add prototype
+    result.add definition
 
   if debug:
     echo "################################################################################"
     echo "untyped: "
     echo result.repr
     echo "################################################################################"
-    result = newCall(bindSym"debugAst", result)
+    #result = newCall(bindSym"debugAst", result)

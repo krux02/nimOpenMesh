@@ -133,5 +133,6 @@ proc tang1_weight*(valence, vertex_id: int): Scalar =
 proc dump*(max_valency: int = cache_size - 1): void =
   assert(max_valency < cache_size)
   for i in 0 .. max_valency:
-    stdout.write("(", i, " : ", proj_weight(i), ", ", limit_weight(i), ", ", step_weight(i,1), "), ")
+    stdout.write "(", i, " : ", proj_weight(i), ", ", limit_weight(i)
+    stdout.write ", ", step_weight(i,1), "), "
   echo()

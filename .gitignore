@@ -8,3 +8,4 @@ openmesh
 example
 ziggurat_normal_dist
 /src/ExampleMesh
+/src/meshTypeMethodsTemplate

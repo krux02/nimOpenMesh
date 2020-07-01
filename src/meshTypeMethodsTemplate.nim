@@ -26,6 +26,11 @@ template meshTypeMethodsTemplate*(MeshType: typedesc): untyped =
   # pointer types that point into an index of a `seq` and don't break
   # when the seq resizes.
 
+  template makeRef*(m: var MeshType; h: VertexHandle): untyped = MeshType.VertexRef(mesh: m.addr, handle: h)
+  template makeRef*(m: var MeshType; h: FaceHandle): untyped = MeshType.FaceRef(mesh: m.addr, handle: h)
+  template makeRef*(m: var MeshType; h: EdgeHandle): untyped = MeshType.EdgeRef(mesh: m.addr, handle: h)
+  template makeRef*(m: var MeshType; h: HalfedgeHandle): untyped = MeshType.HalfedgeRef(mesh: m.addr, handle: h)
+
   iterator vertexRefs*(mesh : var MeshType) : MeshType.VertexRef =
     var vertexRef : MeshType.VertexRef
     vertexRef.mesh = mesh.addr
@@ -234,6 +239,20 @@ template meshTypeMethodsTemplate*(MeshType: typedesc): untyped =
     for halfedge in face.circulateInHalfedges:
       result += 1
 
+  proc find_halfedge(vertex1, vertex2: MeshType.VertexRef): MeshType.HalfedgeRef =
+    ## Returs the Halfedge ref that points from `vertex1` to
+    ## `vertex2`. If such halfedge does not exist, returns a ref with
+    ## an invalid handle.
+    assert(vertex1.mesh == vertex2.mesh)
+    assert(vertex1.handle.is_valid() and vertex2.handle.is_valid())
+
+    for it in vertex1.circulateOutHalfedges:
+      if it.connectivity.vertex_handle == vertex2.handle:
+        return it
+
+    result.mesh = vertex1.mesh
+    result.handle = InvalidHalfedgeHandle;
+
   proc is_boundary*(halfedge: MeshType.HalfedgeRef): bool =
     return not halfedge.goFace.handle.isValid
 
@@ -369,6 +388,8 @@ template meshTypeMethodsTemplate*(MeshType: typedesc): untyped =
     ## the angle <(_in_heh,next_halfedge(_in_heh))
     let (vec0, vec1) = halfedge.calc_sector_vectors
     xyz(result) = cross(vec0.xyz, vec1.xyz) # (p2-p1)^(p0-p1)
+
+  bind angle
 
   proc calc_dihedral_angle*(halfedge: MeshType.HalfedgeRef) : MeshType.vertexPropertyType(point).T =
     if halfedge.goEdge.is_boundary:
@@ -541,3 +562,224 @@ template meshTypeMethodsTemplate*(MeshType: typedesc): untyped =
       result.xyz() += cross(in_he_vec.xyz, out_he_vec.xyz); # sector area is taken into account
 
       in_he_vec = - out_he_vec; # change the orientation
+
+  proc new_edge(mesh: var MeshType, startVh,endVh: VertexHandle): HalfedgeHandle {.inline.} =
+    let he = mesh.addEdge.goHalfedge
+    he.connectivity.vertex_handle = endVh
+    he.goOpp.connectivity.vertex_handle = startVh
+    result = he.handle
+
+  proc adjust_outgoing_halfedge*(arg: MeshType.VertexRef) =
+    for it in arg.circulateOutHalfedges:
+      if it.isBoundary:
+        arg.connectivity.out_halfedge_handle = it.handle
+        break
+
+  proc addFace*(mesh: var MeshType; vertex_handles: openArray[VertexHandle]): FaceHandle =
+    var vh: MeshType.VertexRef
+    let n: int = vertex_handles.len
+    var inner_next, inner_prev, outer_next, outer_prev, boundary_next, boundary_prev, patch_sart, path_end: MeshType.HalfedgeRef
+
+    # Check sufficient working storage available
+
+    if mesh.edgeData.len < n:
+      mesh.edgeData.setLen(n);
+      mesh.next_cache.setLen(6*n)
+
+    var next_cache_count = 0
+
+    # don't allow degenerated faces
+    if n < 3:
+      echo "PolyMeshT::add_face: not enough vertices"
+      return InvalidFaceHandle;
+
+
+    var v1, v2 = MeshType.VertexRef(mesh: mesh.addr)
+    # test for topological errors
+    for i in 0 ..< n:
+      let ii = (i+1) mod n
+      v1.handle = vertex_handles[i]
+      v2.handle = vertex_handles[ii]
+
+      if not is_boundary(v1):
+        echo "PolyMeshT::add_face: complex vertex"
+        return InvalidFaceHandle
+
+      # Initialise edge attributes
+      mesh.edgeData[i].halfedge_handle = find_halfedge(v1, v2).handle
+      mesh.edgeData[i].is_new = not mesh.edgeData[i].halfedge_handle.is_valid()
+      mesh.edgeData[i].needs_adjust = false
+
+      if not mesh.edgeData[i].is_new and not is_boundary(makeRef(mesh, mesh.edgeData[i].halfedge_handle)):
+        echo "PolyMeshT::add_face: complex edge"
+        return InvalidFaceHandle
+
+    # re-link patches if necessary
+    for i in 0 ..< n:
+      let ii = (i+1) mod n
+
+      if not mesh.edgeData[i].is_new and not mesh.edgeData[ii].is_new:
+        inner_prev = makeRef(mesh, mesh.edgeData[i].halfedge_handle)
+        inner_next = makeRef(mesh, mesh.edgeData[ii].halfedge_handle)
+
+        if inner_prev.goNext.handle != inner_next.handle:
+          # here comes the ugly part... we have to relink a whole patch
+
+          # search a free gap
+          # free gap will be between boundary_prev and boundary_next
+          outer_prev = inner_next.goOpp
+          outer_next = inner_prev.goOpp
+          boundary_prev = outer_prev;
+          while true:
+            boundary_prev = boundary_prev.goNext.goOpp
+            if is_boundary(boundary_prev):
+              break
+            boundary_next = boundary_prev.goNext
+
+          # ok ?
+          if boundary_prev == inner_prev:
+            echo "PolyMeshT::add_face: patch re-linking failed"
+            return InvalidFaceHandle
+
+
+          assert(is_boundary(boundary_prev))
+          assert(is_boundary(boundary_next))
+
+          # other halfedges' handles
+          let patch_start = inner_prev.goNext
+          let patch_end   = inner_next.goPrev
+
+          assert(boundary_prev.handle.is_valid())
+          assert(patch_start.handle.is_valid())
+          assert(patch_end.handle.is_valid())
+          assert(boundary_next.handle.is_valid())
+          assert(inner_prev.handle.is_valid())
+          assert(inner_next.handle.is_valid())
+
+          # relink
+          mesh.next_cache[next_cache_count+0] = (boundary_prev.handle, patch_start.handle)
+          mesh.next_cache[next_cache_count+1] = (patch_end.handle, boundary_next.handle)
+          mesh.next_cache[next_cache_count+2] = (inner_prev.handle, inner_next.handle)
+          next_cache_count += 3
+
+
+    # create missing edges
+    for i in 0 ..< n:
+      let ii = (i+1) mod n
+      if mesh.edgeData[i].is_new:
+        mesh.edgeData[i].halfedge_handle = mesh.new_edge(vertex_handles[i], vertex_handles[ii])
+
+    # create the face
+
+    let fh = mesh.addFace()
+    fh.connectivity.halfedge_handle = mesh.edgeData[n-1].halfedge_handle
+
+    # setup halfedges
+    for i in 0 ..< n:
+      let ii = (i+1) mod n
+      vh         = makeRef(mesh, vertex_handles[ii])
+      inner_prev = makeRef(mesh, mesh.edgeData[i].halfedge_handle)
+      inner_next = makeRef(mesh, mesh.edgeData[ii].halfedge_handle)
+      assert(inner_prev.handle.is_valid())
+      assert(inner_next.handle.is_valid())
+
+      var id = 0;
+      if mesh.edgeData[i].is_new:  id += 1
+      if mesh.edgeData[ii].is_new: id += 2
+
+      if id != 0:
+        outer_prev = goOpp(inner_next)
+        outer_next = goOpp(inner_prev)
+        assert(outer_prev.handle.is_valid())
+        assert(outer_next.handle.is_valid())
+
+        # set outer links
+        case id
+        of 1: # prev is new, next is old
+          boundary_prev = inner_next.goPrev;
+          assert(boundary_prev.handle.is_valid())
+          mesh.next_cache[next_cache_count] = (boundary_prev.handle, outer_next.handle)
+          inc next_cache_count
+          vh.connectivity.out_halfedge_handle = outer_next.handle
+
+        of 2: # next is new, prev is old
+          boundary_next = inner_prev.goNext;
+          assert(boundary_next.handle.is_valid());
+          mesh.next_cache[next_cache_count] = (outer_prev.handle, boundary_next.handle)
+          inc next_cache_count
+          vh.connectivity.out_halfedge_handle = boundary_next.handle
+
+        of 3: # both are new
+          if not vh.connectivity.out_halfedge_handle.is_valid():
+            vh.connectivity.out_halfedge_handle = outer_next.handle
+            mesh.next_cache[next_cache_count] = (outer_prev.handle, outer_next.handle)
+            inc next_cache_count
+          else:
+            boundary_next = vh.goOutHalfedge
+            boundary_prev = boundary_next.goPrev
+            assert(boundary_prev.handle.is_valid())
+            assert(boundary_next.handle.is_valid())
+            mesh.next_cache[next_cache_count+0] = (boundary_prev.handle, outer_next.handle)
+            mesh.next_cache[next_cache_count+1] = (outer_prev.handle, boundary_next.handle)
+            next_cache_count += 2
+        else:
+          assert false, $id
+
+        # set inner link
+        mesh.next_cache[next_cache_count] = (inner_prev.handle, inner_next.handle)
+        next_cache_count += 1
+
+      else:
+        mesh.edgeData[ii].needs_adjust = (vh.connectivity.out_halfedge_handle == inner_next.handle)
+
+      # set face handle
+      mesh.connectivity(mesh.edgeData[i].halfedge_handle).face_handle = fh.handle
+
+    # process next halfedge cache
+    for i in 0 ..< next_cache_count:
+      let a = mesh.next_cache[i][0]
+      let b = mesh.next_cache[i][1]
+      mesh.connectivity(a).next_halfedge_handle = b
+
+    # adjust vertices' halfedge handle
+    for i in 0 ..< n:
+      if mesh.edgeData[i].needs_adjust:
+        adjust_outgoing_halfedge(mesh.makeRef(vertex_handles[i]))
+
+    return fh.handle
+
+
+#[
+#TriConnectivity::FaceHandle
+#TriConnectivity::add_face(const VertexHandle* _vertex_handles, size_t _vhs_size)
+{
+  # need at least 3 vertices
+  if (_vhs_size < 3) return InvalidFaceHandle;
+
+  #/ face is triangle -> ok
+  if (_vhs_size == 3)
+    return PolyConnectivity::add_face(_vertex_handles, _vhs_size);
+
+  #/ face is not a triangle -> triangulate
+  else
+  {
+    #omlog() << "triangulating " << _vhs_size << "_gon\n";
+
+    VertexHandle vhandles[3];
+    vhandles[0] = _vertex_handles[0];
+
+    FaceHandle fh;
+    unsigned int i(1);
+    --_vhs_size;
+
+    while (i < _vhs_size)
+    {
+      vhandles[1] = _vertex_handles[i];
+      vhandles[2] = _vertex_handles[++i];
+      fh = PolyConnectivity::add_face(vhandles, 3);
+    }
+
+    return fh;
+  }
+}
+]#
